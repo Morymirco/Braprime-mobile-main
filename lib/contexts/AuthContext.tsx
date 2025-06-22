@@ -7,9 +7,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  otpSent: boolean;
-  signInWithPhone: (phone: string) => Promise<{ error?: any; success?: boolean }>;
-  verifyOtp: (phone: string, token: string) => Promise<{ error?: any; success?: boolean; data?: any }>;
+  signInWithEmailPassword: (email: string, password: string) => Promise<{ error?: any; success?: boolean }>;
+  signUpWithEmailPassword: (email: string, password: string, fullName: string) => Promise<{ error?: any; success?: boolean }>;
   signOut: () => Promise<{ error?: any }>;
   clearError: () => void;
 }
@@ -21,7 +20,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [otpSent, setOtpSent] = useState(false);
 
   useEffect(() => {
     const getSession = async () => {
@@ -41,33 +39,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithPhone = async (phone: string) => {
+  const signInWithEmailPassword = async (email: string, password: string) => {
     setLoading(true);
     setError(null);
-    setOtpSent(false);
-    
     try {
-      console.log('🔐 Tentative de connexion avec le numéro:', `+224${phone}`);
-      
-      const { error } = await supabase.auth.signInWithOtp({ 
-        phone: `+224${phone}`,
-        options: {
-          shouldCreateUser: true,
-        }
-      });
-      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        console.error('❌ Erreur de connexion:', error);
         setError(error.message);
         return { error };
       }
-      
-      console.log('✅ Code OTP envoyé avec succès');
-      setOtpSent(true);
-      return { success: true };
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user ?? null);
+        return { success: true };
+      }
+      setError("Connexion impossible. Veuillez réessayer.");
+      return { error: { message: "Connexion impossible." } };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      console.error('❌ Exception lors de la connexion:', err);
       setError(errorMessage);
       return { error: { message: errorMessage } };
     } finally {
@@ -75,59 +64,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const verifyOtp = async (phone: string, token: string) => {
+  const signUpWithEmailPassword = async (email: string, password: string, fullName: string) => {
     setLoading(true);
     setError(null);
-    
     try {
-      console.log('🔍 Vérification du code OTP:', token);
-      
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: `+224${phone}`,
-        token,
-        type: 'sms'
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+        },
       });
-      
       if (error) {
-        console.error('❌ Erreur de vérification OTP:', error);
         setError(error.message);
         return { error };
       }
-      
-      console.log('✅ OTP vérifié avec succès, utilisateur connecté:', data.user?.id);
-      
-      // Vérifier si le profil a été créé
-      if (data.user) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (profileError) {
-          console.warn('⚠️ Profil non trouvé, création manuelle nécessaire:', profileError);
-          // Essayer de créer le profil manuellement
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: data.user.id,
-              email: data.user.email,
-              phone: data.user.phone,
-              full_name: data.user.user_metadata?.full_name || ''
-            });
-          
-          if (insertError) {
-            console.error('❌ Erreur lors de la création manuelle du profil:', insertError);
-            setError('Erreur lors de la création du profil utilisateur. Veuillez contacter le support.');
-            return { error: insertError };
-          }
-        }
-      }
-      
-      return { success: true, data };
+      // L'utilisateur doit confirmer son email (selon config Supabase)
+      return { success: true };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      console.error('❌ Exception lors de la vérification OTP:', err);
       setError(errorMessage);
       return { error: { message: errorMessage } };
     } finally {
@@ -160,9 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     error,
-    otpSent,
-    signInWithPhone,
-    verifyOtp,
+    signInWithEmailPassword,
+    signUpWithEmailPassword,
     signOut,
     clearError,
   };

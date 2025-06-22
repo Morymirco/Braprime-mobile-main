@@ -1,48 +1,73 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signInWithPhone, loading, error, clearError } = useAuth();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const { signInWithEmailPassword, signUpWithEmailPassword, loading, error, clearError } = useAuth();
+
+  // Step 1: email + mot de passe
+  const [step, setStep] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Step 2: inscription (prénom, nom)
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleBack = () => {
-    router.back();
-  };
-
-  const handleNumberPress = (num: string) => {
-    if (phoneNumber.length < 9) {
-      setPhoneNumber(prev => prev + num);
-    }
-  };
-
-  const handleDelete = () => {
-    setPhoneNumber(prev => prev.slice(0, -1));
-  };
-
-  const handleContinue = async () => {
-    if (phoneNumber.length === 9) {
+    if (step === 'register') {
+      setStep('login');
       clearError();
-      const result = await signInWithPhone(phoneNumber);
-      
-      if (result.error) {
-        Alert.alert(
-          'Erreur de connexion',
-          result.error.message || 'Une erreur est survenue lors de l\'envoi du code de vérification.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // Passer le numéro de téléphone à l'écran de vérification
-        router.push({
-          pathname: '/verify',
-          params: { phone: phoneNumber }
-        });
-      }
+    } else {
+      router.back();
     }
+  };
+
+  const handleLogin = async () => {
+    clearError();
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez saisir votre email et mot de passe.');
+      return;
+    }
+    const result = await signInWithEmailPassword(email, password);
+    if (result.error) {
+      // Si l'utilisateur n'existe pas, proposer l'inscription
+      if (result.error.message && result.error.message.toLowerCase().includes('invalid login credentials')) {
+        setStep('register');
+      } else {
+        Alert.alert('Erreur', result.error.message || 'Erreur de connexion.');
+      }
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
+
+  const handleRegister = async () => {
+    clearError();
+    if (!email || !password || !firstName || !lastName) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      return;
+    }
+    const fullName = `${firstName} ${lastName}`;
+    const result = await signUpWithEmailPassword(email, password, fullName);
+    if (result.error) {
+      Alert.alert('Erreur', result.error.message || "Erreur lors de l'inscription.");
+    } else {
+      Alert.alert('Inscription réussie', 'Vérifiez votre email pour confirmer votre compte.');
+      setStep('login');
+      setPassword('');
+    }
+  };
+
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   return (
@@ -53,83 +78,105 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.title}>Login or create{'\n'}an account</Text>
+        <Text style={styles.title}>{step === 'login' ? 'Connexion' : 'Inscription'}</Text>
 
-        {/* Phone Input */}
+        {/* Email */}
         <View style={styles.inputContainer}>
-          <View style={styles.countryCode}>
-            <Image 
-              source={{ uri: 'https://flagcdn.com/w160/gn.png' }}
-              style={styles.flag}
-            />
-            <Text style={styles.countryCodeText}>+224</Text>
-            <Ionicons name="chevron-down" size={20} color="#666" />
-          </View>
-          <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+          <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Adresse email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
         </View>
+
+        {/* Mot de passe */}
+        <View style={styles.inputContainer}>
+          <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Mot de passe"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+          <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Prénom/Nom pour inscription */}
+        {step === 'register' && (
+          <>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Prénom"
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                editable={!loading}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Nom"
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+                editable={!loading}
+              />
+            </View>
+          </>
+        )}
 
         {/* Error Message */}
         {error && (
           <Text style={styles.errorText}>{error}</Text>
         )}
 
-        {/* Continue Button */}
-        <TouchableOpacity 
+        {/* Bouton principal */}
+        <TouchableOpacity
           style={[
-            styles.continueButton, 
-            phoneNumber.length === 9 && !loading && styles.continueButtonActive
+            styles.continueButton,
+            isValidEmail(email) && password.length >= 6 && styles.continueButtonActive
           ]}
-          onPress={handleContinue}
-          disabled={phoneNumber.length !== 9 || loading}
+          onPress={step === 'login' ? handleLogin : handleRegister}
+          disabled={loading || !isValidEmail(email) || password.length < 6}
         >
           <Text style={[
-            styles.continueButtonText, 
-            phoneNumber.length === 9 && !loading && styles.continueButtonTextActive
+            styles.continueButtonText,
+            isValidEmail(email) && password.length >= 6 && styles.continueButtonTextActive
           ]}>
-            {loading ? 'Envoi en cours...' : 'Continue'}
+            {loading
+              ? 'Veuillez patienter...'
+              : step === 'login'
+                ? 'Se connecter'
+                : "S'inscrire"}
           </Text>
         </TouchableOpacity>
 
-        {/* Terms Text */}
-        <Text style={styles.termsText}>
-          By clicking "Continue" you agree with our{' '}
-          <Text style={styles.termsLink}>Terms and Conditions</Text>
-        </Text>
-
-        {/* Numeric Keypad */}
-        <View style={styles.keypad}>
-          {[
-            ['1', '2', '3'],
-            ['4', '5', '6'],
-            ['7', '8', '9'],
-            ['', '0', 'delete']
-          ].map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.keypadRow}>
-              {row.map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  style={styles.keypadButton}
-                  onPress={() => key === 'delete' ? handleDelete() : key && handleNumberPress(key)}
-                  disabled={loading}
-                >
-                  {key === 'delete' ? (
-                    <Ionicons name="backspace-outline" size={24} color="black" />
-                  ) : (
-                    <Text style={styles.keypadButtonText}>{key}</Text>
-                  )}
-                  {key === '2' && <Text style={styles.keypadSubText}>ABC</Text>}
-                  {key === '3' && <Text style={styles.keypadSubText}>DEF</Text>}
-                  {key === '4' && <Text style={styles.keypadSubText}>GHI</Text>}
-                  {key === '5' && <Text style={styles.keypadSubText}>JKL</Text>}
-                  {key === '6' && <Text style={styles.keypadSubText}>MNO</Text>}
-                  {key === '7' && <Text style={styles.keypadSubText}>PQRS</Text>}
-                  {key === '8' && <Text style={styles.keypadSubText}>TUV</Text>}
-                  {key === '9' && <Text style={styles.keypadSubText}>WXYZ</Text>}
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
-        </View>
+        {/* Lien pour basculer entre connexion/inscription */}
+        {step === 'login' ? (
+          <TouchableOpacity onPress={() => { setStep('register'); clearError(); }}>
+            <Text style={styles.switchText}>Pas de compte ? <Text style={styles.switchLink}>Créer un compte</Text></Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => { setStep('login'); clearError(); }}>
+            <Text style={styles.switchText}>Déjà un compte ? <Text style={styles.switchLink}>Se connecter</Text></Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -161,27 +208,13 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  countryCode: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  inputIcon: {
     marginRight: 12,
-    paddingRight: 12,
-    borderRightWidth: 1,
-    borderRightColor: '#E5E5E5',
   },
-  flag: {
-    width: 24,
-    height: 16,
-    marginRight: 8,
-    borderRadius: 2,
-  },
-  countryCodeText: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  phoneNumber: {
+  input: {
     flex: 1,
     fontSize: 16,
+    color: '#000',
   },
   errorText: {
     color: '#E41E31',
@@ -207,36 +240,14 @@ const styles = StyleSheet.create({
   continueButtonTextActive: {
     color: '#fff',
   },
-  termsText: {
+  switchText: {
     textAlign: 'center',
     color: '#666',
-    fontSize: 12,
-    marginBottom: 32,
+    fontSize: 14,
+    marginTop: 16,
   },
-  termsLink: {
+  switchLink: {
     color: '#E41E31',
-  },
-  keypad: {
-    marginTop: 'auto',
-  },
-  keypadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  keypadButton: {
-    width: '33%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  keypadButtonText: {
-    fontSize: 24,
-    fontWeight: '500',
-  },
-  keypadSubText: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 2,
+    fontWeight: 'bold',
   },
 }); 

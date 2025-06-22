@@ -1,10 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useProfile } from '../../hooks/useProfile';
+import { useAuth } from '../../lib/contexts/AuthContext';
 
 type MapOption = 'google' | 'apple';
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const { signOut } = useAuth();
+  const { profile, loading } = useProfile();
+  
   const [showMapModal, setShowMapModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedMap, setSelectedMap] = useState<MapOption>('google');
@@ -29,9 +36,72 @@ export default function ProfileScreen() {
     return cleaned;
   };
 
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditProfile = () => {
+    router.push('/profile/edit');
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Chargement...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>My Account</Text>
+      <Text style={styles.title}>Mon Compte</Text>
+
+      {/* Profile Section */}
+      <View style={styles.profileSection}>
+        <View style={styles.profileHeader}>
+          <Image 
+            source={{ 
+              uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80'
+            }}
+            style={styles.profileAvatar}
+          />
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>
+              {profile?.full_name || 'Nom non défini'}
+            </Text>
+            <Text style={styles.profileEmail}>
+              {profile?.email || 'Email non défini'}
+            </Text>
+            {profile?.phone && (
+              <Text style={styles.profilePhone}>
+                {profile.phone}
+              </Text>
+            )}
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.editProfileButton}
+          onPress={handleEditProfile}
+        >
+          <Ionicons name="create-outline" size={20} color="#E41E31" />
+          <Text style={styles.editProfileText}>Modifier le profil</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Settings List */}
       <View style={styles.settingsList}>
@@ -39,7 +109,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingLeft}>
             <Ionicons name="language" size={24} color="black" />
-            <Text style={styles.settingText}>Language</Text>
+            <Text style={styles.settingText}>Langue</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -48,7 +118,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingLeft}>
             <Ionicons name="chatbubble-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Chat with us</Text>
+            <Text style={styles.settingText}>Discuter avec nous</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -60,7 +130,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.settingLeft}>
             <Ionicons name="card-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Payment Methods</Text>
+            <Text style={styles.settingText}>Méthodes de paiement</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -72,7 +142,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.settingLeft}>
             <Ionicons name="map-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Default map application</Text>
+            <Text style={styles.settingText}>Application de carte par défaut</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -81,7 +151,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingLeft}>
             <Ionicons name="mail-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Subscription settings</Text>
+            <Text style={styles.settingText}>Paramètres d'abonnement</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -90,7 +160,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingLeft}>
             <Ionicons name="document-text-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Terms & Services</Text>
+            <Text style={styles.settingText}>Conditions et services</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
@@ -99,9 +169,20 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingLeft}>
             <Ionicons name="lock-closed-outline" size={24} color="black" />
-            <Text style={styles.settingText}>Privacy Policy</Text>
+            <Text style={styles.settingText}>Politique de confidentialité</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
+        </TouchableOpacity>
+
+        {/* Sign Out */}
+        <TouchableOpacity 
+          style={[styles.settingItem, styles.signOutItem]}
+          onPress={handleSignOut}
+        >
+          <View style={styles.settingLeft}>
+            <Ionicons name="log-out-outline" size={24} color="#E41E31" />
+            <Text style={[styles.settingText, styles.signOutText]}>Se déconnecter</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -116,8 +197,8 @@ export default function ProfileScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             
-            <Text style={styles.modalTitle}>Default map application</Text>
-            <Text style={styles.modalSubtitle}>Will be opened to display address of the order</Text>
+            <Text style={styles.modalTitle}>Application de carte par défaut</Text>
+            <Text style={styles.modalSubtitle}>Sera ouverte pour afficher l'adresse de la commande</Text>
 
             {/* Map Options */}
             <View style={styles.optionsContainer}>
@@ -131,7 +212,7 @@ export default function ProfileScreen() {
                     source={{ uri: 'https://images.unsplash.com/photo-1592910147752-5e6cc17c269f?w=64&h=64&fit=crop' }}
                     style={styles.mapIcon}
                   />
-                  <Text style={styles.optionText}>Google maps</Text>
+                  <Text style={styles.optionText}>Google Maps</Text>
                 </View>
                 <View style={[
                   styles.radioButton,
@@ -162,7 +243,7 @@ export default function ProfileScreen() {
               style={styles.saveButton}
               onPress={() => setShowMapModal(false)}
             >
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>Enregistrer</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -179,12 +260,12 @@ export default function ProfileScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             
-            <Text style={styles.modalTitle}>Add New Card</Text>
+            <Text style={styles.modalTitle}>Ajouter une nouvelle carte</Text>
 
             {/* Card Form */}
             <View style={styles.form}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Card Number</Text>
+                <Text style={styles.label}>Numéro de carte</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="1234 5678 9012 3456"
@@ -197,10 +278,10 @@ export default function ProfileScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>Expiry Date</Text>
+                  <Text style={styles.label}>Date d'expiration</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="MM/YY"
+                    placeholder="MM/AA"
                     value={expiryDate}
                     onChangeText={(text) => setExpiryDate(formatExpiryDate(text))}
                     keyboardType="numeric"
@@ -223,7 +304,7 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Cardholder Name</Text>
+                <Text style={styles.label}>Nom du titulaire</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="JOHN DOE"
@@ -238,7 +319,7 @@ export default function ProfileScreen() {
               style={styles.saveButton}
               onPress={() => setShowPaymentModal(false)}
             >
-              <Text style={styles.saveButtonText}>Save Card</Text>
+              <Text style={styles.saveButtonText}>Enregistrer la carte</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -259,6 +340,54 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     textAlign: 'center',
   },
+  profileSection: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  profileEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  profilePhone: {
+    fontSize: 14,
+    color: '#666',
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E41E31',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  editProfileText: {
+    color: '#E41E31',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
   settingsList: {
     paddingHorizontal: 16,
   },
@@ -277,6 +406,13 @@ const styles = StyleSheet.create({
   },
   settingText: {
     fontSize: 16,
+  },
+  signOutItem: {
+    marginTop: 16,
+    borderBottomWidth: 0,
+  },
+  signOutText: {
+    color: '#E41E31',
   },
   modalOverlay: {
     flex: 1,

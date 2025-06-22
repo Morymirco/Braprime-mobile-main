@@ -10,8 +10,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =====================================================
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-    email TEXT,
-    phone TEXT UNIQUE,
+    email TEXT UNIQUE,
+    phone TEXT,
     full_name TEXT,
     avatar_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -189,6 +189,11 @@ BEGIN
     VALUES (NEW.id, 0, 'CFA');
     
     RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Log l'erreur mais ne pas faire échouer l'inscription
+        RAISE WARNING 'Erreur lors de la création du profil: %', SQLERRM;
+        RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -219,6 +224,10 @@ CREATE POLICY "Users can view own profile" ON profiles
 
 CREATE POLICY "Users can update own profile" ON profiles
     FOR UPDATE USING (auth.uid() = id);
+
+-- Politique pour permettre l'insertion automatique
+CREATE POLICY "Enable insert for authenticated users only" ON profiles
+    FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Politiques pour addresses
 CREATE POLICY "Users can view own addresses" ON addresses

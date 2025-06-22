@@ -1,7 +1,9 @@
 import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Router, useRouter } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useProfile } from '../../hooks/useProfile';
+import { useAuth } from '../../lib/contexts/AuthContext';
 
 interface IconProps {
   size: number;
@@ -11,56 +13,56 @@ interface IconProps {
 const MENU_ITEMS = [
   {
     id: 'orders',
-    title: 'My Orders',
+    title: 'Mes Commandes',
     icon: (props: IconProps) => <MaterialIcons name="receipt-long" {...props} />,
     onPress: (router: Router) => router.push('/orders'),
   },
   {
     id: 'favorites',
-    title: 'My Favorites',
+    title: 'Mes Favoris',
     icon: (props: IconProps) => <MaterialIcons name="favorite-outline" {...props} />,
   },
   {
     id: 'language',
-    title: 'Language',
+    title: 'Langue',
     icon: (props: IconProps) => <MaterialCommunityIcons name="translate" {...props} />,
     showArrow: true,
   },
   {
     id: 'chat',
-    title: 'Chat with us',
+    title: 'Discuter avec nous',
     icon: (props: IconProps) => <Ionicons name="chatbubble-outline" {...props} />,
     showArrow: true,
   },
   {
     id: 'payment',
-    title: 'Payment Methods',
+    title: 'Méthodes de paiement',
     icon: (props: IconProps) => <MaterialIcons name="credit-card" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/payment/payment-methods'),
   },
   {
     id: 'map',
-    title: 'Default map application',
+    title: 'Application de carte par défaut',
     icon: (props: IconProps) => <MaterialCommunityIcons name="map-marker-outline" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/map/default-map'),
   },
   {
     id: 'terms',
-    title: 'Terms & Services',
+    title: 'Conditions et services',
     icon: (props: IconProps) => <MaterialIcons name="description" {...props} />,
     showArrow: true,
   },
   {
     id: 'privacy',
-    title: 'Privacy Policy',
+    title: 'Politique de confidentialité',
     icon: (props: IconProps) => <MaterialIcons name="lock-outline" {...props} />,
     showArrow: true,
   },
   {
     id: 'review',
-    title: 'Give a Review',
+    title: 'Donner un avis',
     icon: (props: IconProps) => <MaterialIcons name="thumb-up-off-alt" {...props} />,
     showArrow: true,
     arrowIcon: 'chevron-right' as const,
@@ -69,6 +71,8 @@ const MENU_ITEMS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
+  const { profile, loading } = useProfile();
 
   const handleEditName = () => {
     router.push('/profile/edit');
@@ -84,10 +88,38 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Chargement du profil...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Account</Text>
+        <Text style={styles.title}>Mon Compte</Text>
         <TouchableOpacity style={styles.settingsButton}>
           <Ionicons name="settings-outline" size={24} color="black" />
         </TouchableOpacity>
@@ -98,12 +130,16 @@ export default function ProfileScreen() {
         <View style={styles.profileSection}>
           <TouchableOpacity style={styles.userInfo} onPress={handleEditName}>
             <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80' }}
+              source={{ 
+                uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80'
+              }}
               style={styles.avatar}
             />
             <View style={styles.userNameContainer}>
-              <Text style={styles.userName}>Ibrahim Diallo</Text>
-              <Text style={styles.editText}>Edit</Text>
+              <Text style={styles.userName}>
+                {profile?.full_name || 'Nom non défini'}
+              </Text>
+              <Text style={styles.editText}>Modifier</Text>
             </View>
             <Feather name="chevron-right" size={20} color="#666" style={styles.editArrow} />
           </TouchableOpacity>
@@ -111,7 +147,7 @@ export default function ProfileScreen() {
           {/* Wallet Card */}
           <TouchableOpacity style={styles.walletCard} onPress={handleWalletPress}>
             <View>
-              <Text style={styles.walletLabel}>Wallet</Text>
+              <Text style={styles.walletLabel}>Portefeuille</Text>
               <View style={styles.walletAmount}>
                 <Text style={styles.walletValue}>0</Text>
                 <Text style={styles.walletCurrency}>CFA</Text>
@@ -143,8 +179,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -177,6 +213,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
   },
   profileSection: {
     paddingTop: 20,
