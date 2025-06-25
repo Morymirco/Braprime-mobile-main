@@ -182,12 +182,21 @@ export function useGlobalSearch(): UseGlobalSearchReturn {
     try {
       setLoading(true);
       setError(null);
+      console.log('🔍 Début de la recherche globale pour:', query);
+      
       const results = await BusinessService.globalSearch(query);
+      
+      console.log('📊 Résultats de recherche:', {
+        businesses: results.businesses.length,
+        menuItems: results.menuItems.length
+      });
+      
       setBusinesses(results.businesses);
       setMenuItems(results.menuItems);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la recherche');
-      console.error('Erreur dans useGlobalSearch:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la recherche';
+      console.error('❌ Erreur dans useGlobalSearch:', err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

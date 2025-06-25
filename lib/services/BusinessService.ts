@@ -278,21 +278,22 @@ export class BusinessService {
   static async searchMenuItems(query: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('products')
+        .from('menu_items')
         .select(`
           *,
-          store:stores(id, name, business_type_id, image_url),
-          business_type:business_types(id, name, icon, color)
+          business:businesses(id, name, business_type_id, cover_image, logo)
         `)
         .eq('is_available', true)
         .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
-        .order('name');
+        .order('name')
+        .limit(50);
 
       if (error) {
         console.error('Erreur lors de la recherche d\'éléments de menu:', error);
         throw error;
       }
 
+      console.log('Résultats de recherche menu:', data?.length || 0, 'éléments trouvés');
       return data || [];
     } catch (error) {
       console.error('Erreur dans searchMenuItems:', error);

@@ -96,7 +96,7 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
     >
       <Image
         source={{
-          uri: item.image_url || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&q=80'
+          uri: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&q=80'
         }}
         style={styles.menuItemImage}
         resizeMode="cover"
@@ -113,7 +113,7 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
             {item.price?.toLocaleString()} GNF
           </Text>
           <Text style={styles.menuItemStore}>
-            {item.store?.name || 'Commerce'}
+            {item.business?.name || 'Commerce'}
           </Text>
         </View>
       </View>
