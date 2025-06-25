@@ -72,7 +72,7 @@ const MENU_ITEMS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
-  const { profile, loading } = useProfile();
+  const { profile, loading, error } = useProfile();
 
   const handleEditName = () => {
     router.push('/profile/edit');
@@ -116,6 +116,19 @@ export default function ProfileScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Erreur: {error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -131,13 +144,13 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.userInfo} onPress={handleEditName}>
             <Image 
               source={{ 
-                uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80'
+                uri: profile?.profile_image || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'U')}&background=random&size=100`
               }}
               style={styles.avatar}
             />
             <View style={styles.userNameContainer}>
               <Text style={styles.userName}>
-                {profile?.full_name || 'Nom non défini'}
+                {profile?.name || 'Nom non défini'}
               </Text>
               <Text style={styles.editText}>Modifier</Text>
             </View>
@@ -222,6 +235,29 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#E31837',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#E31837',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
   profileSection: {
     paddingTop: 20,

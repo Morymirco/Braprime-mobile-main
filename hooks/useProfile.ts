@@ -4,134 +4,113 @@ import { supabase } from '../lib/supabase/config';
 
 export interface UserProfile {
   id: string;
-  email: string | null;
-  phone: string | null;
-  full_name: string | null;
-  avatar_url: string | null;
+  name: string;
+  email: string;
+  role_id: number;
+  phone_number?: string;
+  address?: string;
+  profile_image?: string;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
+  role_name?: string;
+  role_description?: string;
 }
 
-export function useProfile() {
+export const useProfile = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Créer un profil manquant
-  const createProfile = async (userId: string) => {
-    try {
-      console.log('🔧 Création du profil manquant pour:', userId);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: user?.email || null,
-          phone: user?.phone || null,
-          full_name: user?.user_metadata?.full_name || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('❌ Erreur création profil:', error);
-        throw error;
-      }
-
-      console.log('✅ Profil créé avec succès:', data);
-      return data;
-    } catch (err) {
-      console.error('❌ Erreur lors de la création du profil:', err);
-      throw err;
-    }
-  };
-
-  // Récupérer le profil utilisateur
   const fetchProfile = async () => {
-    if (!user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('profiles')
+      if (!user) {
+        setError('Utilisateur non authentifié');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔍 Récupération du profil pour l\'utilisateur:', user.id);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        // Si le profil n'existe pas, le créer
-        if (error.code === 'PGRST116') {
-          console.log('⚠️  Profil non trouvé, création en cours...');
-          const newProfile = await createProfile(user.id);
-          setProfile(newProfile);
-          return;
-        }
-        throw error;
+      if (profileError) {
+        console.error('❌ Erreur lors de la récupération du profil:', profileError);
+        setError(profileError.message);
+        setLoading(false);
+        return;
       }
 
-      setProfile(data);
+      if (!profileData) {
+        setError('Profil utilisateur non trouvé');
+        setLoading(false);
+        return;
+      }
+
+      const transformedProfile: UserProfile = {
+        ...profileData,
+        role_name: profileData.role_id === 2 ? 'partner' : 'customer',
+        role_description: profileData.role_id === 2 ? 'Partenaire commercial' : 'Client'
+      };
+
+      console.log('✅ Profil récupéré avec succès:', transformedProfile);
+      setProfile(transformedProfile);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération du profil';
-      setError(errorMessage);
-      console.error('Erreur fetchProfile:', err);
+      console.error('❌ Erreur lors de la récupération du profil:', err);
+      setError('Erreur de connexion');
     } finally {
       setLoading(false);
     }
   };
 
-  // Mettre à jour le profil utilisateur
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) {
-      throw new Error('Utilisateur non connecté');
-    }
-
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('profiles')
+      if (!user) {
+        setError('Utilisateur non authentifié');
+        return;
+      }
+
+      const { data: updatedProfile, error } = await supabase
+        .from('user_profiles')
         .update(updates)
         .eq('id', user.id)
-        .select()
+        .select('*')
         .single();
 
       if (error) {
-        throw error;
+        console.error('❌ Erreur lors de la mise à jour du profil:', error);
+        setError(error.message);
+        return;
       }
 
-      setProfile(data);
-      return { success: true, data };
+      const transformedProfile: UserProfile = {
+        ...updatedProfile,
+        role_name: updatedProfile.role_id === 2 ? 'partner' : 'customer',
+        role_description: updatedProfile.role_id === 2 ? 'Partenaire commercial' : 'Client'
+      };
+
+      setProfile(transformedProfile);
+      console.log('✅ Profil mis à jour avec succès:', transformedProfile);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du profil';
-      setError(errorMessage);
-      console.error('Erreur updateProfile:', err);
-      return { error: errorMessage };
+      console.error('❌ Erreur lors de la mise à jour du profil:', err);
+      setError('Erreur de connexion');
     } finally {
       setLoading(false);
     }
   };
 
-  // Mettre à jour l'avatar
-  const updateAvatar = async (avatarUrl: string) => {
-    return updateProfile({ avatar_url: avatarUrl });
-  };
-
-  // Effacer les erreurs
-  const clearError = () => {
-    setError(null);
-  };
-
-  // Charger le profil au montage et quand l'utilisateur change
+  // Récupérer le profil au montage du composant
   useEffect(() => {
     fetchProfile();
   }, [user]);
@@ -140,9 +119,7 @@ export function useProfile() {
     profile,
     loading,
     error,
-    fetchProfile,
-    updateProfile,
-    updateAvatar,
-    clearError,
+    refetch: fetchProfile,
+    updateProfile
   };
-} 
+}; 

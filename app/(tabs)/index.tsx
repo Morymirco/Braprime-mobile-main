@@ -1,6 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BusinessTypesGrid from '../../components/BusinessTypesGrid';
+import BusinessTypesSkeleton from '../../components/BusinessTypesSkeleton';
+import { useBusinessTypes } from '../../hooks/useBusinessTypes';
+import { BusinessType } from '../../lib/services/BusinessTypeService';
 
 const { width } = Dimensions.get('window');
 
@@ -27,52 +32,53 @@ const BANNERS = [
   },
 ];
 
-const SERVICES = [
-  { 
-    id: 1, 
-    title: 'Restaurants', 
-    icon: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=200&q=80',
-  },
-  { 
-    id: 2, 
-    title: 'Supermarket', 
-    icon: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
-    badge: '24/7' 
-  },
-  { 
-    id: 3, 
-    title: 'Market', 
-    icon: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
-  },
-  { 
-    id: 4, 
-    title: 'Electronics', 
-    icon: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200&q=80',
-    badge: 'New' 
-  },
-  { 
-    id: 5, 
-    title: 'Gifting', 
-    icon: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&q=80',
-  },
-  { 
-    id: 6, 
-    title: 'Drugs', 
-    icon: 'https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=200&q=80',
-  },
-  { 
-    id: 7, 
-    title: 'Makeup\nKit', 
-    icon: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=200&q=80',
-  },
-  { 
-    id: 8, 
-    title: 'More', 
-    icon: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=200&q=80',
-  },
-];
-
 export default function HomeScreen() {
+  const { businessTypes, loading, error } = useBusinessTypes();
+  const router = useRouter();
+
+  // Fonction pour formater le nom du type de commerce
+  const formatBusinessTypeName = (name: string) => {
+    const nameMap: { [key: string]: string } = {
+      'restaurant': 'Restaurants',
+      'cafe': 'Cafés',
+      'market': 'Marchés',
+      'supermarket': 'Supermarchés',
+      'pharmacy': 'Pharmacie',
+      'electronics': 'Électronique',
+      'beauty': 'Beauté',
+      'hairdressing': 'Coiffure',
+      'hardware': 'Bricolage',
+      'bookstore': 'Librairie',
+      'document_service': 'Documents'
+    };
+    return nameMap[name] || name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const handleBusinessTypePress = (businessType: BusinessType) => {
+    // Navigation vers la page des commerces de ce type
+    router.push(`/businesses/${businessType.name}`);
+  };
+
+  const handleSeeAllServices = () => {
+    // Navigation vers la page des services
+    router.push('/services');
+  };
+
+  const handleBannerPress = (banner: any) => {
+    // Navigation vers la page des commerces selon le type de bannière
+    const bannerTypeMap: { [key: string]: string } = {
+      'Breakfast': 'restaurant',
+      'Electronics': 'electronics',
+      'Pharmacy': 'pharmacy',
+      'Makeup': 'beauty'
+    };
+    
+    const businessType = bannerTypeMap[banner.title];
+    if (businessType) {
+      router.push(`/businesses/${businessType}`);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Address Header */}
@@ -87,14 +93,15 @@ export default function HomeScreen() {
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      <TouchableOpacity 
+        style={styles.searchContainer}
+        onPress={() => router.push('/search')}
+      >
         <MaterialIcons name="search" size={24} color="#666" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for stores or products"
-          placeholderTextColor="#666"
-        />
-      </View>
+        <Text style={styles.searchPlaceholder}>
+          Rechercher des commerces ou produits
+        </Text>
+      </TouchableOpacity>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Scrollable Banners */}
@@ -105,7 +112,11 @@ export default function HomeScreen() {
           style={styles.bannerScroll}
         >
           {BANNERS.map((banner) => (
-            <View key={banner.id} style={styles.bannerContainer}>
+            <TouchableOpacity 
+              key={banner.id} 
+              style={styles.bannerContainer}
+              onPress={() => handleBannerPress(banner)}
+            >
               <Image
                 source={{ uri: banner.image }}
                 style={styles.bannerImage}
@@ -114,33 +125,24 @@ export default function HomeScreen() {
               <View style={styles.bannerOverlay}>
                 <Text style={styles.bannerText}>{banner.title}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
         {/* Services Grid */}
-        <View style={styles.servicesGrid}>
-          {SERVICES.map((service) => (
-            <TouchableOpacity key={service.id} style={styles.serviceItem}>
-              <View style={styles.serviceIconContainer}>
-                <Image 
-                  source={{ uri: service.icon }} 
-                  style={styles.serviceIcon} 
-                  resizeMode="cover"
-                />
-                {service.badge && (
-                  <View style={[
-                    styles.badge,
-                    { backgroundColor: service.badge === 'New' ? '#E31837' : '#00C853' }
-                  ]}>
-                    <Text style={styles.badgeText}>{service.badge}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.serviceTitle}>{service.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {loading ? (
+          <BusinessTypesSkeleton count={8} />
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>Erreur de chargement des services</Text>
+          </View>
+        ) : (
+          <BusinessTypesGrid 
+            businessTypes={businessTypes} 
+            onPress={handleBusinessTypePress}
+            maxItems={8}
+          />
+        )}
 
         {/* Services Section */}
         <View style={styles.servicesSection}>
@@ -149,7 +151,7 @@ export default function HomeScreen() {
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>New</Text>
             </View>
-            <TouchableOpacity style={styles.seeAllButton}>
+            <TouchableOpacity style={styles.seeAllButton} onPress={handleSeeAllServices}>
               <Text style={styles.seeAllText}>See all</Text>
             </TouchableOpacity>
           </View>
@@ -159,18 +161,38 @@ export default function HomeScreen() {
             style={styles.servicesScroll}
             contentContainerStyle={styles.servicesScrollContent}
           >
-            {SERVICES.slice(0, 4).map((service) => (
-              <View key={service.id} style={styles.serviceCard}>
-                <Image
-                  source={{ uri: service.icon }}
-                  style={styles.serviceCardImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.serviceCardOverlay}>
-                  <Text style={styles.serviceCardTitle}>{service.title}</Text>
+            {loading ? (
+              // Skeleton pour les cartes de services
+              Array.from({ length: 4 }).map((_, index) => (
+                <View key={index} style={styles.serviceCard}>
+                  <View style={[styles.serviceCardImage, { backgroundColor: '#E5E7EB' }]} />
+                  <View style={styles.serviceCardOverlay}>
+                    <View style={{ backgroundColor: '#E5E7EB', height: 16, width: 80, borderRadius: 4 }} />
+                  </View>
                 </View>
+              ))
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>Erreur de chargement</Text>
               </View>
-            ))}
+            ) : (
+              businessTypes.slice(0, 4).map((businessType) => (
+                <TouchableOpacity 
+                  key={businessType.id} 
+                  style={styles.serviceCard}
+                  onPress={() => handleBusinessTypePress(businessType)}
+                >
+                  <Image
+                    source={{ uri: businessType.image_url || 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=400&q=80' }}
+                    style={styles.serviceCardImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.serviceCardOverlay}>
+                    <Text style={styles.serviceCardTitle}>{formatBusinessTypeName(businessType.name)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
         </View>
       </ScrollView>
@@ -216,6 +238,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
+  searchPlaceholder: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#666',
+  },
   content: {
     flex: 1,
   },
@@ -247,49 +275,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-    marginVertical: 24,
-  },
-  serviceItem: {
-    width: '25%',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  serviceIconContainer: {
-    position: 'relative',
-    marginBottom: 8,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: 'hidden',
-    backgroundColor: '#F5F5F5',
-  },
-  serviceIcon: {
-    width: '100%',
-    height: '100%',
-  },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  serviceTitle: {
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#000',
   },
   servicesSection: {
     paddingHorizontal: 16,
@@ -349,6 +334,17 @@ const styles = StyleSheet.create({
   },
   serviceCardTitle: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  errorText: {
+    color: '#E31837',
     fontSize: 16,
     fontWeight: 'bold',
   },

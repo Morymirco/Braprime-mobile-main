@@ -8,15 +8,15 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { session, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (!loading && !user) {
       // Rediriger vers la page de connexion si l'utilisateur n'est pas connecté
       router.replace('/login');
     }
-  }, [session, loading, router]);
+  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -26,7 +26,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null; // Ne rien afficher pendant la redirection
   }
 

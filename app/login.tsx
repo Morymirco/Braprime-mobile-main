@@ -7,26 +7,15 @@ import { useAuth } from '../lib/contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signInWithEmailPassword, signUpWithEmailPassword, loading, error, clearError } = useAuth();
+  const { signInWithEmailPassword, loading, error, clearError } = useAuth();
 
-  // Step 1: email + mot de passe
-  const [step, setStep] = useState<'login' | 'register'>('login');
+  // État pour la connexion
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  // Step 2: inscription (prénom, nom)
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-
   const [showPassword, setShowPassword] = useState(false);
 
   const handleBack = () => {
-    if (step === 'register') {
-      setStep('login');
-      clearError();
-    } else {
-      router.back();
-    }
+    router.back();
   };
 
   const handleLogin = async () => {
@@ -37,31 +26,9 @@ export default function LoginScreen() {
     }
     const result = await signInWithEmailPassword(email, password);
     if (result.error) {
-      // Si l'utilisateur n'existe pas, proposer l'inscription
-      if (result.error.message && result.error.message.toLowerCase().includes('invalid login credentials')) {
-        setStep('register');
-      } else {
-        Alert.alert('Erreur', result.error.message || 'Erreur de connexion.');
-      }
+      Alert.alert('Erreur', result.error.message || 'Erreur de connexion.');
     } else {
       router.replace('/(tabs)');
-    }
-  };
-
-  const handleRegister = async () => {
-    clearError();
-    if (!email || !password || !firstName || !lastName) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
-      return;
-    }
-    const fullName = `${firstName} ${lastName}`;
-    const result = await signUpWithEmailPassword(email, password, fullName);
-    if (result.error) {
-      Alert.alert('Erreur', result.error.message || "Erreur lors de l'inscription.");
-    } else {
-      Alert.alert('Inscription réussie', 'Vérifiez votre email pour confirmer votre compte.');
-      setStep('login');
-      setPassword('');
     }
   };
 
@@ -78,7 +45,7 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.title}>{step === 'login' ? 'Connexion' : 'Inscription'}</Text>
+        <Text style={styles.title}>Connexion</Text>
 
         {/* Email */}
         <View style={styles.inputContainer}>
@@ -113,70 +80,34 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Prénom/Nom pour inscription */}
-        {step === 'register' && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Prénom"
-                value={firstName}
-                onChangeText={setFirstName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Nom"
-                value={lastName}
-                onChangeText={setLastName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-          </>
-        )}
-
         {/* Error Message */}
         {error && (
           <Text style={styles.errorText}>{error}</Text>
         )}
 
-        {/* Bouton principal */}
+        {/* Bouton de connexion */}
         <TouchableOpacity
           style={[
             styles.continueButton,
             isValidEmail(email) && password.length >= 6 && styles.continueButtonActive
           ]}
-          onPress={step === 'login' ? handleLogin : handleRegister}
+          onPress={handleLogin}
           disabled={loading || !isValidEmail(email) || password.length < 6}
         >
           <Text style={[
             styles.continueButtonText,
             isValidEmail(email) && password.length >= 6 && styles.continueButtonTextActive
           ]}>
-            {loading
-              ? 'Veuillez patienter...'
-              : step === 'login'
-                ? 'Se connecter'
-                : "S'inscrire"}
+            {loading ? 'Connexion en cours...' : 'Se connecter'}
           </Text>
         </TouchableOpacity>
 
-        {/* Lien pour basculer entre connexion/inscription */}
-        {step === 'login' ? (
-          <TouchableOpacity onPress={() => { setStep('register'); clearError(); }}>
-            <Text style={styles.switchText}>Pas de compte ? <Text style={styles.switchLink}>Créer un compte</Text></Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={() => { setStep('login'); clearError(); }}>
-            <Text style={styles.switchText}>Déjà un compte ? <Text style={styles.switchLink}>Se connecter</Text></Text>
-          </TouchableOpacity>
-        )}
+        {/* Lien pour créer un compte */}
+        <TouchableOpacity onPress={() => Alert.alert('Information', 'Pour créer un compte, veuillez contacter l\'administrateur.')}>
+          <Text style={styles.switchText}>
+            Pas de compte ? <Text style={styles.switchLink}>Contacter l'administrateur</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );

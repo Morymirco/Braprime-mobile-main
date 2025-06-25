@@ -1,10 +1,8 @@
-import { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../supabase/config';
+import { AuthService, AuthUser } from '../services/AuthService';
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   error: string | null;
   signInWithEmailPassword: (email: string, password: string) => Promise<{ error?: any; success?: boolean }>;
@@ -16,26 +14,37 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) setError(error.message);
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
+    // Récupérer l'utilisateur actuel au démarrage
+    const getCurrentUser = async () => {
+      try {
+        const { user: currentUser, error } = await AuthService.getCurrentUser();
+        if (error) {
+          console.error('Erreur lors de la récupération de l\'utilisateur:', error);
+        } else {
+          setUser(currentUser);
+        }
+      } catch (err) {
+        console.error('Erreur lors de la récupération de l\'utilisateur:', err);
+      } finally {
+        setLoading(false);
+      }
     };
-    getSession();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+
+    getCurrentUser();
+
+    // Écouter les changements d'authentification
+    const { data: { subscription } } = AuthService.onAuthStateChange((user) => {
+      setUser(user);
+      setLoading(false);
     });
+
     return () => {
-      listener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -43,14 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { user: authUser, error } = await AuthService.login(email, password);
       if (error) {
-        setError(error.message);
-        return { error };
+        setError(error);
+        return { error: { message: error } };
       }
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.user ?? null);
+      if (authUser) {
+        setUser(authUser);
         return { success: true };
       }
       setError("Connexion impossible. Veuillez réessayer.");
@@ -68,19 +76,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { user: authUser, error } = await AuthService.signup({
         email,
         password,
-        options: {
-          data: { full_name: fullName },
-        },
+        name: fullName,
       });
       if (error) {
-        setError(error.message);
-        return { error };
+        setError(error);
+        return { error: { message: error } };
       }
-      // L'utilisateur doit confirmer son email (selon config Supabase)
-      return { success: true };
+      if (authUser) {
+        setUser(authUser);
+        return { success: true };
+      }
+      setError("Inscription impossible. Veuillez réessayer.");
+      return { error: { message: "Inscription impossible." } };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       setError(errorMessage);
@@ -94,9 +104,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) setError(error.message);
-      return { error };
+      const { error } = await AuthService.logout();
+      if (error) {
+        setError(error);
+        return { error: { message: error } };
+      }
+      setUser(null);
+      return { success: true };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       setError(errorMessage);
@@ -111,7 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = {
-    session,
     user,
     loading,
     error,
