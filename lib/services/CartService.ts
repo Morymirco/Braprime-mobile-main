@@ -396,7 +396,7 @@ export class CartService {
       // }
 
       // Pour l'instant, retourner un ID fictif
-      const orderId = crypto.randomUUID();
+      const orderId = this.generateOrderId();
       
       // Vider le panier
       await this.clearCart(userId);
@@ -406,6 +406,13 @@ export class CartService {
       console.error('Erreur lors de la conversion du panier en commande:', error);
       return { orderId: null, error: 'Erreur lors de la conversion du panier en commande' };
     }
+  }
+
+  // Générer un ID de commande unique
+  private static generateOrderId(): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    return `ORDER-${timestamp}-${random}`.toUpperCase();
   }
 
   // S'abonner aux changements du panier (temps réel)

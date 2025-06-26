@@ -470,4 +470,9 @@ export class AuthService {
       }
     })
   }
+
+  // Récupérer la session Supabase actuelle
+  static async getSupabaseSession() {
+    return await supabase.auth.getSession()
+  }
 } 

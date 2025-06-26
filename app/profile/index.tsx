@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import SessionInfo from '../../components/SessionInfo';
 import { useProfile } from '../../hooks/useProfile';
 import { useAuth } from '../../lib/contexts/AuthContext';
 
@@ -9,7 +10,7 @@ type MapOption = 'google' | 'apple';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user, isAuthenticated, sessionValid } = useAuth();
   const { profile, loading } = useProfile();
   
   const [showMapModal, setShowMapModal] = useState(false);
@@ -70,27 +71,33 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Mon Compte</Text>
 
+      {/* Session Info */}
+      <SessionInfo showDetails={true} />
+
       {/* Profile Section */}
       <View style={styles.profileSection}>
         <View style={styles.profileHeader}>
           <Image 
             source={{ 
-              uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80'
+              uri: profile?.avatar_url || user?.profile_image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80'
             }}
             style={styles.profileAvatar}
           />
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
-              {profile?.full_name || 'Nom non défini'}
+              {profile?.full_name || user?.name || 'Nom non défini'}
             </Text>
             <Text style={styles.profileEmail}>
-              {profile?.email || 'Email non défini'}
+              {profile?.email || user?.email || 'Email non défini'}
             </Text>
-            {profile?.phone && (
+            {(profile?.phone || user?.phone_number) && (
               <Text style={styles.profilePhone}>
-                {profile.phone}
+                {profile?.phone || user?.phone_number}
               </Text>
             )}
+            <Text style={styles.profileRole}>
+              {user?.role === 'customer' ? 'Client' : 'Partenaire'}
+            </Text>
           </View>
         </View>
         
@@ -369,6 +376,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   profilePhone: {
+    fontSize: 14,
+    color: '#666',
+  },
+  profileRole: {
     fontSize: 14,
     color: '#666',
   },
