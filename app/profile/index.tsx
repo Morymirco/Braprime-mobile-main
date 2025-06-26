@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import ProfileSkeleton from '../../components/ProfileSkeleton';
 import SessionInfo from '../../components/SessionInfo';
 import { useProfile } from '../../hooks/useProfile';
 import { useAuth } from '../../lib/contexts/AuthContext';
@@ -62,7 +63,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Chargement...</Text>
+        <ProfileSkeleton />
       </View>
     );
   }

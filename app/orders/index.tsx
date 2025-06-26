@@ -5,6 +5,7 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import OrdersPageSkeleton from '../../components/OrdersPageSkeleton';
 import { useOrders } from '../../hooks/useOrders';
 
 const { width } = Dimensions.get('window');
@@ -26,6 +28,7 @@ interface OrderItem {
   price: number;
   quantity: number;
   specialInstructions?: string;
+  image?: string;
 }
 
 interface LocalOrder {
@@ -109,6 +112,10 @@ export default function OrdersScreen() {
 
   const [selectedOrder, setSelectedOrder] = useState<LocalOrder | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingOrder, setRatingOrder] = useState<LocalOrder | null>(null);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'past3months' | 'older'>('all');
@@ -119,7 +126,14 @@ export default function OrdersScreen() {
     date: new Date(order.created_at),
     total: order.grand_total,
     status: order.status,
-    items: order.items || [],
+    items: (order.items || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      specialInstructions: item.special_instructions,
+      image: item.image
+    })),
     businessName: order.business_name,
     deliveryAddress: order.delivery_address || '',
     deliveryMethod: order.delivery_method,
@@ -197,6 +211,37 @@ export default function OrdersScreen() {
     );
   }, [cancelOrder]);
 
+  // Handle open rating modal
+  const handleOpenRating = useCallback((order: LocalOrder) => {
+    setRatingOrder(order);
+    setRating(0);
+    setComment('');
+    setShowRatingModal(true);
+  }, []);
+
+  // Handle submit rating
+  const handleSubmitRating = useCallback(async () => {
+    if (!ratingOrder || rating === 0) {
+      Alert.alert('Erreur', 'Veuillez donner une note entre 1 et 5 étoiles');
+      return;
+    }
+
+    try {
+      const result = await rateOrder(ratingOrder.id, rating, comment);
+      if (result.success) {
+        setShowRatingModal(false);
+        setRatingOrder(null);
+        setRating(0);
+        setComment('');
+        Alert.alert('Succès', 'Votre avis a été enregistré avec succès');
+      } else {
+        Alert.alert('Erreur', result.error || 'Erreur lors de l\'enregistrement de l\'avis');
+      }
+    } catch (err) {
+      Alert.alert('Erreur', 'Erreur lors de l\'enregistrement de l\'avis');
+    }
+  }, [ratingOrder, rating, comment, rateOrder]);
+
   const handleBack = () => {
     router.back();
   };
@@ -240,6 +285,16 @@ export default function OrdersScreen() {
           <Text style={styles.viewButtonText}>Voir les détails</Text>
           <Feather name="chevron-right" size={16} color="#E31837" />
         </TouchableOpacity>
+        
+        {item.status === 'delivered' && !item.customer_rating && (
+          <TouchableOpacity 
+            style={styles.rateButton}
+            onPress={() => handleOpenRating(item)}
+          >
+            <MaterialIcons name="star" size={16} color="#f59e0b" />
+            <Text style={styles.rateButtonText}>Noter</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -265,9 +320,7 @@ export default function OrdersScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Mes Commandes</Text>
         </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement de vos commandes...</Text>
-        </View>
+        <OrdersPageSkeleton />
       </SafeAreaView>
     );
   }
@@ -437,6 +490,13 @@ export default function OrdersScreen() {
                 <Text style={styles.sectionTitle}>Articles commandés</Text>
                 {selectedOrder.items.map((item, index) => (
                   <View key={index} style={styles.itemCard}>
+                    {item.image && (
+                      <Image
+                        source={{ uri: item.image }}
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                      />
+                    )}
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName}>{item.name}</Text>
                       <Text style={styles.itemQuantity}>Quantité: {item.quantity}</Text>
@@ -501,9 +561,130 @@ export default function OrdersScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+
+              {selectedOrder.status === 'delivered' && !selectedOrder.customer_rating && (
+                <View style={styles.modalSection}>
+                  <TouchableOpacity 
+                    style={styles.rateOrderButton}
+                    onPress={() => {
+                      setShowOrderDetails(false);
+                      handleOpenRating(selectedOrder);
+                    }}
+                  >
+                    <MaterialIcons name="star" size={20} color="#f59e0b" />
+                    <Text style={styles.rateOrderButtonText}>Noter cette commande</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {selectedOrder.customer_rating && (
+                <View style={styles.modalSection}>
+                  <View style={styles.ratingDisplay}>
+                    <Text style={styles.sectionTitle}>Votre avis</Text>
+                    <View style={styles.starsDisplay}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <MaterialIcons
+                          key={star}
+                          name={selectedOrder.customer_rating >= star ? "star" : "star-border"}
+                          size={20}
+                          color={selectedOrder.customer_rating >= star ? "#f59e0b" : "#d1d5db"}
+                        />
+                      ))}
+                    </View>
+                    {selectedOrder.customer_review && (
+                      <Text style={styles.reviewText}>{selectedOrder.customer_review}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
             </ScrollView>
           </SafeAreaView>
         )}
+      </Modal>
+
+      {/* Rating Modal */}
+      <Modal
+        visible={showRatingModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity 
+              onPress={() => setShowRatingModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="black" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Noter votre commande</Text>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {ratingOrder && (
+              <>
+                {/* Order Info */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.sectionTitle}>Commande #{ratingOrder.id}</Text>
+                  <Text style={styles.businessNameText}>{ratingOrder.businessName}</Text>
+                  <Text style={styles.orderDateText}>{formatDate(ratingOrder.date)}</Text>
+                </View>
+
+                {/* Rating Stars */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.sectionTitle}>Votre note</Text>
+                  <View style={styles.starsContainer}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setRating(star)}
+                        style={styles.starButton}
+                      >
+                        <MaterialIcons
+                          name={rating >= star ? "star" : "star-border"}
+                          size={32}
+                          color={rating >= star ? "#f59e0b" : "#d1d5db"}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={styles.ratingText}>
+                    {rating === 0 && "Sélectionnez une note"}
+                    {rating === 1 && "Très mauvais"}
+                    {rating === 2 && "Mauvais"}
+                    {rating === 3 && "Moyen"}
+                    {rating === 4 && "Bon"}
+                    {rating === 5 && "Excellent"}
+                  </Text>
+                </View>
+
+                {/* Comment */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.sectionTitle}>Votre commentaire (optionnel)</Text>
+                  <TextInput
+                    style={styles.commentInput}
+                    placeholder="Partagez votre expérience..."
+                    value={comment}
+                    onChangeText={setComment}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                {/* Submit Button */}
+                <View style={styles.modalSection}>
+                  <TouchableOpacity 
+                    style={[styles.submitRatingButton, rating === 0 && styles.submitRatingButtonDisabled]}
+                    onPress={handleSubmitRating}
+                    disabled={rating === 0}
+                  >
+                    <Text style={styles.submitRatingButtonText}>Envoyer l'avis</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -725,6 +906,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 4,
   },
+  rateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+  },
+  rateButtonText: {
+    fontSize: 14,
+    color: '#f59e0b',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#fff',
@@ -769,7 +964,6 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
     backgroundColor: '#f9fafb',
@@ -778,6 +972,7 @@ const styles = StyleSheet.create({
   },
   itemInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   itemName: {
     fontSize: 15,
@@ -793,11 +988,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     fontStyle: 'italic',
+    marginTop: 2,
   },
   itemPrice: {
     fontSize: 15,
     fontWeight: '600',
     color: '#000',
+    marginLeft: 8,
+  },
+  itemImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
   },
   infoCard: {
     backgroundColor: '#f9fafb',
@@ -823,5 +1026,83 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  businessNameText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    marginBottom: 4,
+  },
+  orderDateText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  starButton: {
+    padding: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  commentInput: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  submitRatingButton: {
+    backgroundColor: '#E31837',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitRatingButtonDisabled: {
+    backgroundColor: '#f3f4f6',
+  },
+  submitRatingButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  rateOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef3c7',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  rateOrderButtonText: {
+    color: '#92400e',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  ratingDisplay: {
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderRadius: 8,
+  },
+  starsDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 }); 
