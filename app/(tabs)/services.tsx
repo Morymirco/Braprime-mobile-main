@@ -47,7 +47,7 @@ export default function ServicesScreen() {
 
   const handleServicePress = (businessType: BusinessType) => {
     // Navigation vers la page des commerces de ce type
-    router.push(`/businesses/${businessType.name}`);
+    router.push(`/businesses/type/${businessType.name}`);
   };
 
   const handleRefresh = async () => {

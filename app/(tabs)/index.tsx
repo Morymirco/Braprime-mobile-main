@@ -56,7 +56,7 @@ export default function HomeScreen() {
 
   const handleBusinessTypePress = (businessType: BusinessType) => {
     // Navigation vers la page des commerces de ce type
-    router.push(`/businesses/${businessType.name}`);
+    router.push(`/businesses/type/${businessType.name}`);
   };
 
   const handleSeeAllServices = () => {

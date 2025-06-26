@@ -1,5 +1,14 @@
 import { supabase } from '../supabase/config';
 
+// Fonction pour générer un ID unique compatible React Native
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 export interface CartItem {
   id: string;
   cart_id: string;
@@ -10,6 +19,7 @@ export interface CartItem {
   image?: string;
   special_instructions?: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Cart {
@@ -20,6 +30,7 @@ export interface Cart {
   delivery_method: 'delivery' | 'pickup';
   delivery_address?: string;
   delivery_instructions?: string;
+  delivery_fee?: number;
   created_at: string;
   updated_at: string;
   items: CartItem[];
@@ -92,6 +103,7 @@ export class CartService {
         delivery_method: cartData.delivery_method,
         delivery_address: cartData.delivery_address,
         delivery_instructions: cartData.delivery_instructions,
+        delivery_fee: cartData.delivery_fee,
         created_at: cartData.created_at,
         updated_at: cartData.updated_at,
         items: cartData.items || [],
@@ -375,44 +387,65 @@ export class CartService {
   // Convertir le panier en commande (vider le panier après)
   static async convertCartToOrder(userId: string, orderData: any): Promise<{ orderId: string | null; error: string | null }> {
     try {
+      console.log('🔄 Conversion du panier en commande pour l\'utilisateur:', userId);
+      
       // Récupérer le panier actuel
       const { cart: currentCart } = await this.getCart(userId);
       
       if (!currentCart || currentCart.items.length === 0) {
+        console.log('❌ Panier vide, impossible de convertir');
         return { orderId: null, error: 'Le panier est vide' };
       }
 
-      // Ici, vous pouvez appeler le service de commande pour créer la commande
-      // const { order, error } = await OrderService.createOrder({
-      //   ...orderData,
-      //   items: currentCart.items,
-      //   total: currentCart.total
-      // });
+      // Importer OrderService dynamiquement pour éviter les dépendances circulaires
+      const { OrderService } = await import('./OrderService');
 
-      // Si la commande est créée avec succès, vider le panier
-      // if (order) {
-      //   await this.clearCart(userId);
-      //   return { orderId: order.id, error: null };
-      // }
+      // Préparer les données de la commande
+      const createOrderData = {
+        id: generateUUID(),
+        user_id: userId,
+        business_id: currentCart.business_id,
+        business_name: currentCart.business_name,
+        items: currentCart.items,
+        status: 'pending' as const,
+        total: currentCart.total,
+        delivery_fee: orderData.totals?.deliveryFee || 0,
+        tax: orderData.totals?.tax || 0,
+        grand_total: orderData.totals?.total || currentCart.total,
+        delivery_address: orderData.delivery?.address || '',
+        delivery_method: orderData.delivery?.method || 'delivery',
+        estimated_delivery: orderData.delivery?.estimated_delivery || new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes par défaut
+        payment_method: orderData.payment?.method || 'cash',
+        payment_status: 'pending'
+      };
 
-      // Pour l'instant, retourner un ID fictif
-      const orderId = this.generateOrderId();
+      console.log('📋 Données de commande préparées:', createOrderData);
+
+      // Créer la commande via OrderService
+      const { order, error: orderError } = await OrderService.createOrder(createOrderData);
       
-      // Vider le panier
-      await this.clearCart(userId);
+      if (orderError || !order) {
+        console.error('❌ Erreur lors de la création de la commande:', orderError);
+        return { orderId: null, error: orderError || 'Erreur lors de la création de la commande' };
+      }
+
+      console.log('✅ Commande créée avec succès:', order.id);
+
+      // Vider le panier après création réussie de la commande
+      const { error: clearError } = await this.clearCart(userId);
       
-      return { orderId, error: null };
+      if (clearError) {
+        console.warn('⚠️ Erreur lors du vidage du panier:', clearError);
+        // On ne retourne pas d'erreur car la commande a été créée avec succès
+      } else {
+        console.log('✅ Panier vidé avec succès');
+      }
+      
+      return { orderId: order.id, error: null };
     } catch (error) {
-      console.error('Erreur lors de la conversion du panier en commande:', error);
+      console.error('❌ Erreur lors de la conversion du panier en commande:', error);
       return { orderId: null, error: 'Erreur lors de la conversion du panier en commande' };
     }
-  }
-
-  // Générer un ID de commande unique
-  private static generateOrderId(): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    return `ORDER-${timestamp}-${random}`.toUpperCase();
   }
 
   // S'abonner aux changements du panier (temps réel)

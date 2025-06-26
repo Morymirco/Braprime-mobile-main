@@ -103,6 +103,26 @@ export class BusinessService {
    */
   static async getBusinessesByTypeName(typeName: string): Promise<BusinessWithType[]> {
     try {
+      // First, get the business type ID by name
+      const { data: businessType, error: typeError } = await supabase
+        .from('business_types')
+        .select('id')
+        .eq('name', typeName)
+        .single();
+
+      if (typeError) {
+        console.error('Erreur lors de la récupération du type de commerce:', typeError);
+        throw typeError;
+      }
+
+      if (!businessType) {
+        console.log('❌ Type de commerce non trouvé:', typeName);
+        return [];
+      }
+
+      console.log('🔍 Found business type ID:', businessType.id);
+
+      // Then get businesses by the type ID
       const { data, error } = await supabase
         .from('businesses')
         .select(`
@@ -110,13 +130,25 @@ export class BusinessService {
           business_type:business_types(id, name, icon, color, image_url),
           category:categories(id, name, icon, color)
         `)
-        .eq('business_type.name', typeName)
+        .eq('business_type_id', businessType.id)
         .eq('is_active', true)
         .order('name');
 
       if (error) {
         console.error('Erreur lors de la récupération des commerces par nom de type:', error);
         throw error;
+      }
+
+      console.log('🔍 getBusinessesByTypeName - Found businesses:', data?.length || 0);
+      if (data) {
+        data.forEach((business, index) => {
+          console.log(`  Business ${index + 1}:`, {
+            id: business.id,
+            idType: typeof business.id,
+            name: business.name,
+            businessType: business.business_type?.name
+          });
+        });
       }
 
       return data || [];
@@ -131,6 +163,11 @@ export class BusinessService {
    */
   static async getBusinessById(id: number): Promise<BusinessWithType | null> {
     try {
+      // Validate ID
+      if (!id || isNaN(id) || id <= 0) {
+        throw new Error('ID de commerce invalide');
+      }
+
       const { data, error } = await supabase
         .from('businesses')
         .select(`

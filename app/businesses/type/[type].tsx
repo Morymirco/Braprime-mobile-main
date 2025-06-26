@@ -2,7 +2,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
     Image,
     RefreshControl,
     ScrollView,
@@ -10,12 +9,12 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import BusinessCardSkeleton from '../../components/BusinessesSkeleton';
-import { useBusinessesByTypeName } from '../../hooks/useBusinesses';
-import { BusinessWithType } from '../../lib/services/BusinessService';
+import BusinessCardSkeleton from '../../../components/BusinessesSkeleton';
+import { useBusinessesByTypeName } from '../../../hooks/useBusinesses';
+import { BusinessWithType } from '../../../lib/services/BusinessService';
 
 export default function BusinessListScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
@@ -60,9 +59,13 @@ export default function BusinessListScreen() {
 
   const handleBusinessPress = (business: BusinessWithType) => {
     // Navigation vers la page détaillée du commerce
-    console.log('Navigation vers le commerce:', business.name);
-    // TODO: Implémenter la navigation vers la page détaillée
-    Alert.alert('Commerce sélectionné', `Vous avez sélectionné ${business.name}`);
+    console.log('🔍 Navigation vers le commerce:', {
+      name: business.name,
+      id: business.id,
+      idType: typeof business.id,
+      idString: business.id.toString()
+    });
+    router.push(`/businesses/${business.id}`);
   };
 
   const handleBackPress = () => {
@@ -270,10 +273,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 8,
     paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
-    height: 44,
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: '#e0e0e0',
   },
   searchInput: {
     flex: 1,
@@ -292,6 +295,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 12,
     marginBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   businessImage: {
     width: 70,
@@ -307,30 +312,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   businessName: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#000',
     flex: 1,
     marginRight: 8,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFF',
   },
   businessDescription: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
-    marginBottom: 6,
     lineHeight: 18,
+    marginBottom: 8,
   },
   businessDetails: {
     flexDirection: 'row',
@@ -371,33 +376,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginLeft: 4,
-    flex: 1,
   },
   deliveryFee: {
     fontSize: 12,
-    color: '#E31837',
     fontWeight: '600',
+    color: '#E31837',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
-    minHeight: 300,
+    padding: 32,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E31837',
+    color: '#000',
     marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
   },
   errorMessage: {
-    color: '#666',
     fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   retryButton: {
     backgroundColor: '#E31837',
@@ -406,29 +408,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: {
-    color: '#fff',
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
-    minHeight: 300,
+    padding: 32,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#000',
     marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
   },
   emptyMessage: {
-    color: '#999',
-    fontSize: 14,
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 24,
   },
 }); 
