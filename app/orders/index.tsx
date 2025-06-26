@@ -1,352 +1,510 @@
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  FlatList,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OrdersSkeleton from '../../components/OrdersSkeleton';
-import SyncStatus from '../../components/SyncStatus';
-import { useColorScheme } from '../../hooks/useColorScheme';
 import { useOrders } from '../../hooks/useOrders';
-import { useToast } from '../../hooks/useToast';
-import { Order } from '../../lib/services/OrderService';
 
-type FilterTab = 'all' | 'active' | 'delivered' | 'cancelled';
+const { width } = Dimensions.get('window');
+
+type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  specialInstructions?: string;
+}
+
+interface LocalOrder {
+  id: string;
+  date: Date;
+  total: number;
+  status: OrderStatus;
+  items: OrderItem[];
+  businessName: string;
+  deliveryAddress: string;
+  deliveryMethod: 'delivery' | 'pickup';
+  paymentMethod: string;
+  estimatedDelivery: Date;
+  driverName?: string;
+  driverPhone?: string;
+}
+
+// Helper function to get status badge color
+const getStatusColor = (status: OrderStatus) => {
+  switch (status) {
+    case 'pending': return '#fff3cd';
+    case 'confirmed': return '#d1ecf1';
+    case 'preparing': return '#d4edda';
+    case 'ready': return '#d1ecf1';
+    case 'picked_up': return '#e2e3e5';
+    case 'delivered': return '#d4edda';
+    case 'cancelled': return '#f8d7da';
+    default: return '#f3f4f6';
+  }
+};
+
+const getStatusTextColor = (status: OrderStatus) => {
+  switch (status) {
+    case 'pending': return '#856404';
+    case 'confirmed': return '#0c5460';
+    case 'preparing': return '#155724';
+    case 'ready': return '#0c5460';
+    case 'picked_up': return '#383d41';
+    case 'delivered': return '#155724';
+    case 'cancelled': return '#721c24';
+    default: return '#6b7280';
+  }
+};
+
+// Helper function to get status icon
+const StatusIcon = ({ status, size = 16 }: { status: OrderStatus; size?: number }) => {
+  switch (status) {
+    case 'pending': return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'confirmed': return <Ionicons name="checkmark-circle-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'preparing': return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'ready': return <Ionicons name="checkmark-circle-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'picked_up': return <Ionicons name="car-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'delivered': return <Ionicons name="checkmark-circle" size={size} color={getStatusTextColor(status)} />;
+    case 'cancelled': return <Ionicons name="close-circle" size={size} color={getStatusTextColor(status)} />;
+    default: return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
+  }
+};
+
+// Helper function to format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'GNF',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+// Helper function to format date
+const formatDate = (date: Date) => {
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 export default function OrdersScreen() {
-  const { orders, loading, error, refetch, cancelOrder, rateOrder } = useOrders();
-  const { showToast } = useToast();
-  const colorScheme = useColorScheme();
-  const [refreshing, setRefreshing] = useState(false);
-  const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
-  const [ratingOrder, setRatingOrder] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const router = useRouter();
+  const { orders, loading, error, cancelOrder, rateOrder } = useOrders();
 
-  // Filtrer les commandes selon l'onglet actif
-  const filteredOrders = useMemo(() => {
+  const [selectedOrder, setSelectedOrder] = useState<LocalOrder | null>(null);
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'past3months' | 'older'>('all');
+
+  // Convertir les commandes vers le format local
+  const localOrders: LocalOrder[] = useMemo(() => orders.map(order => ({
+    id: order.id,
+    date: new Date(order.created_at),
+    total: order.grand_total,
+    status: order.status,
+    items: order.items || [],
+    businessName: order.business_name,
+    deliveryAddress: order.delivery_address || '',
+    deliveryMethod: order.delivery_method,
+    paymentMethod: order.payment_method,
+    estimatedDelivery: new Date(order.estimated_delivery || order.created_at),
+    driverName: order.driver_name,
+    driverPhone: order.driver_phone
+  })), [orders]);
+
+  // Filter orders based on selected filter and search term
+  const filteredOrders = useMemo(() => localOrders.filter((order) => {
+    const matchesFilter = filter === 'all' || order.status === filter;
+    const matchesSearch = 
+      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.items.some(item => item.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    return matchesFilter && matchesSearch;
+  }), [localOrders, filter, searchTerm]);
+
+  // Group orders by time period
+  const { recentOrders, past3MonthsOrders, olderOrders } = useMemo(() => {
+    const currentDate = new Date();
+    const last30Days = new Date(currentDate);
+    last30Days.setDate(currentDate.getDate() - 30);
+    
+    const last90Days = new Date(currentDate);
+    last90Days.setDate(currentDate.getDate() - 90);
+
+    const recent = filteredOrders.filter(order => order.date >= last30Days);
+    const past3Months = filteredOrders.filter(order => order.date >= last90Days && order.date < last30Days);
+    const older = filteredOrders.filter(order => order.date < last90Days);
+
+    return { recentOrders: recent, past3MonthsOrders: past3Months, olderOrders: older };
+  }, [filteredOrders]);
+
+  // Get orders for current tab
+  const getCurrentTabOrders = () => {
     switch (activeTab) {
-      case 'active':
-        return orders.filter(order => 
-          ['pending', 'confirmed', 'preparing', 'ready', 'picked_up'].includes(order.status)
-        );
-      case 'delivered':
-        return orders.filter(order => order.status === 'delivered');
-      case 'cancelled':
-        return orders.filter(order => order.status === 'cancelled');
-      default:
-        return orders;
-    }
-  }, [orders, activeTab]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refetch();
-      showToast('success', 'Commandes actualisées');
-    } catch (error) {
-      showToast('error', 'Erreur lors de l\'actualisation');
-    } finally {
-      setRefreshing(false);
+      case 'recent': return recentOrders;
+      case 'past3months': return past3MonthsOrders;
+      case 'older': return olderOrders;
+      default: return filteredOrders;
     }
   };
 
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'pending': return '#f59e0b';
-      case 'confirmed': return '#3b82f6';
-      case 'preparing': return '#f97316';
-      case 'ready': return '#10b981';
-      case 'picked_up': return '#8b5cf6';
-      case 'delivered': return '#059669';
-      case 'cancelled': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
+  // Handle view order details
+  const handleViewOrderDetails = useCallback((order: LocalOrder) => {
+    setSelectedOrder(order);
+    setShowOrderDetails(true);
+  }, []);
 
-  const getStatusLabel = (status: Order['status']) => {
-    switch (status) {
-      case 'pending': return 'En attente';
-      case 'confirmed': return 'Confirmée';
-      case 'preparing': return 'En préparation';
-      case 'ready': return 'Prête';
-      case 'picked_up': return 'En livraison';
-      case 'delivered': return 'Livrée';
-      case 'cancelled': return 'Annulée';
-      default: return status;
-    }
-  };
-
-  const handleCancelOrder = (orderId: string) => {
+  // Handle cancel order
+  const handleCancelOrder = useCallback(async (orderId: string) => {
     Alert.alert(
       'Annuler la commande',
       'Êtes-vous sûr de vouloir annuler cette commande ?',
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: 'Non', style: 'cancel' },
         {
           text: 'Oui',
           style: 'destructive',
           onPress: async () => {
-            setCancellingOrder(orderId);
-            try {
-              const result = await cancelOrder(orderId);
-              if (result.success) {
-                showToast('success', 'Commande annulée avec succès');
-              } else {
-                showToast('error', result.error || 'Erreur lors de l\'annulation');
-              }
-            } catch (err) {
-              showToast('error', 'Erreur lors de l\'annulation');
-            } finally {
-              setCancellingOrder(null);
+            const result = await cancelOrder(orderId);
+            if (result.success) {
+              setShowOrderDetails(false);
+              setSelectedOrder(null);
+              Alert.alert('Succès', 'Commande annulée avec succès');
+            } else {
+              Alert.alert('Erreur', result.error || 'Erreur lors de l\'annulation');
             }
           },
         },
       ]
     );
+  }, [cancelOrder]);
+
+  const handleBack = () => {
+    router.back();
   };
 
-  const handleRateOrder = (orderId: string) => {
-    Alert.prompt(
-      'Noter la commande',
-      'Donnez une note de 1 à 5 étoiles',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Noter',
-          onPress: async (rating) => {
-            const numRating = parseInt(rating || '0');
-            if (numRating >= 1 && numRating <= 5) {
-              setRatingOrder(orderId);
-              try {
-                const result = await rateOrder(orderId, numRating);
-                if (result.success) {
-                  showToast('success', 'Commande notée avec succès');
-                } else {
-                  showToast('error', result.error || 'Erreur lors de la notation');
-                }
-              } catch (err) {
-                showToast('error', 'Erreur lors de la notation');
-              } finally {
-                setRatingOrder(null);
-              }
-            } else {
-              showToast('error', 'La note doit être entre 1 et 5');
-            }
-          },
-        },
-      ],
-      'plain-text',
-      '5'
-    );
-  };
-
-  const renderOrderItem = ({ item }: { item: Order }) => (
-    <View style={styles.orderCard}>
+  const renderOrderItem = ({ item }: { item: LocalOrder }) => (
+    <TouchableOpacity 
+      style={styles.orderCard}
+      onPress={() => handleViewOrderDetails(item)}
+    >
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.businessName}>{item.business_name}</Text>
-          <Text style={styles.orderDate}>
-            {new Date(item.created_at).toLocaleDateString('fr-FR')}
-          </Text>
+          <Text style={styles.businessName}>{item.businessName}</Text>
+          <Text style={styles.orderDate}>Commande #{item.id}</Text>
+          <Text style={styles.orderDate}>{formatDate(item.date)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
+          <StatusIcon status={item.status} />
+          <Text style={[styles.statusText, { color: getStatusTextColor(item.status) }]}>
+            {item.status === 'pending' && 'En attente'}
+            {item.status === 'confirmed' && 'Confirmée'}
+            {item.status === 'preparing' && 'En préparation'}
+            {item.status === 'ready' && 'Prête'}
+            {item.status === 'picked_up' && 'En livraison'}
+            {item.status === 'delivered' && 'Livrée'}
+            {item.status === 'cancelled' && 'Annulée'}
+          </Text>
         </View>
       </View>
 
       <View style={styles.orderDetails}>
         <Text style={styles.orderTotal}>
-          Total: {item.grand_total.toLocaleString()} CFA
+          Total: {formatCurrency(item.total)}
         </Text>
-        <Text style={styles.paymentMethod}>
-          Paiement: {item.payment_method === 'cash' ? 'Espèces' : item.payment_method}
+        <Text style={styles.itemsCount}>
+          {item.items.length} {item.items.length === 1 ? 'article' : 'articles'}
         </Text>
       </View>
-
-      {item.items && item.items.length > 0 && (
-        <View style={styles.itemsContainer}>
-          <Text style={styles.itemsTitle}>Articles:</Text>
-          {item.items.slice(0, 3).map((orderItem, index) => (
-            <View key={index} style={styles.itemRow}>
-              {orderItem.image && (
-                <Image
-                  source={{ uri: orderItem.image }}
-                  style={styles.itemImage}
-                  resizeMode="cover"
-                />
-              )}
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemText}>
-                  • {orderItem.name} x{orderItem.quantity}
-                </Text>
-                {orderItem.special_instructions && (
-                  <Text style={styles.itemInstructions}>
-                    Note: {orderItem.special_instructions}
-                  </Text>
-                )}
-              </View>
-            </View>
-          ))}
-          {item.items.length > 3 && (
-            <Text style={styles.moreItems}>+{item.items.length - 3} autres articles</Text>
-          )}
-        </View>
-      )}
 
       <View style={styles.orderActions}>
-        {item.status === 'pending' && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => handleCancelOrder(item.id)}
-            disabled={cancellingOrder === item.id}
-          >
-            {cancellingOrder === item.id ? (
-              <ActivityIndicator size="small" color="#ef4444" />
-            ) : (
-              <>
-                <MaterialIcons name="cancel" size={16} color="#ef4444" />
-                <Text style={styles.cancelButtonText}>Annuler</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {item.status === 'delivered' && !item.customer_rating && (
-          <TouchableOpacity
-            style={styles.rateButton}
-            onPress={() => handleRateOrder(item.id)}
-            disabled={ratingOrder === item.id}
-          >
-            {ratingOrder === item.id ? (
-              <ActivityIndicator size="small" color="#f59e0b" />
-            ) : (
-              <>
-                <MaterialIcons name="star" size={16} color="#f59e0b" />
-                <Text style={styles.rateButtonText}>Noter</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {item.customer_rating && (
-          <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>
-              Votre note: {item.customer_rating}/5 ⭐
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
-  const renderTabButton = (tab: FilterTab, label: string, count: number) => (
-    <TouchableOpacity
-      key={tab}
-      style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <Text style={[styles.tabButtonText, activeTab === tab && styles.tabButtonTextActive]}>
-        {label}
-      </Text>
-      <View style={[styles.tabBadge, activeTab === tab && styles.tabBadgeActive]}>
-        <Text style={[styles.tabBadgeText, activeTab === tab && styles.tabBadgeTextActive]}>
-          {count}
-        </Text>
+        <TouchableOpacity style={styles.viewButton}>
+          <Text style={styles.viewButtonText}>Voir les détails</Text>
+          <Feather name="chevron-right" size={16} color="#E31837" />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
-  if (loading && !refreshing) {
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <MaterialIcons name="receipt-long" size={64} color="#999" />
+      <Text style={styles.emptyTitle}>Aucune commande trouvée</Text>
+      <Text style={styles.emptyText}>
+        {searchTerm || filter !== 'all' 
+          ? 'Aucune commande ne correspond à vos critères de recherche.'
+          : "Vous n'avez pas encore passé de commande."}
+      </Text>
+    </View>
+  );
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color="black" />
+          </TouchableOpacity>
           <Text style={styles.title}>Mes Commandes</Text>
-          <SyncStatus />
         </View>
-        <OrdersSkeleton count={5} />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Chargement de vos commandes...</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
-  // Compter les commandes par statut
-  const activeCount = orders.filter(order => 
-    ['pending', 'confirmed', 'preparing', 'ready', 'picked_up'].includes(order.status)
-  ).length;
-  const deliveredCount = orders.filter(order => order.status === 'delivered').length;
-  const cancelledCount = orders.filter(order => order.status === 'cancelled').length;
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color="black" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Mes Commandes</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color="#E31837" />
+          <Text style={styles.errorText}>Erreur: {error}</Text>
+          <TouchableOpacity style={styles.retryButton}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="black" />
+        </TouchableOpacity>
         <Text style={styles.title}>Mes Commandes</Text>
-        <SyncStatus />
       </View>
 
-      {/* Onglets de filtre */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabsContainer}
-        contentContainerStyle={styles.tabsContent}
-      >
-        {renderTabButton('all', 'Toutes', orders.length)}
-        {renderTabButton('active', 'En cours', activeCount)}
-        {renderTabButton('delivered', 'Livrées', deliveredCount)}
-        {renderTabButton('cancelled', 'Annulées', cancelledCount)}
-      </ScrollView>
-
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#ef4444" />
-          <Text style={styles.errorText}>Erreur: {error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-            <Text style={styles.retryText}>Réessayer</Text>
-          </TouchableOpacity>
+      <View style={styles.content}>
+        {/* Search and Filter */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher des commandes..."
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
+          </View>
+          
+          <View style={styles.filterContainer}>
+            <TouchableOpacity 
+              style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+              onPress={() => setFilter('all')}
+            >
+              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
+                Toutes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, filter === 'pending' && styles.filterButtonActive]}
+              onPress={() => setFilter('pending')}
+            >
+              <Text style={[styles.filterText, filter === 'pending' && styles.filterTextActive]}>
+                En attente
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, filter === 'delivered' && styles.filterButtonActive]}
+              onPress={() => setFilter('delivered')}
+            >
+              <Text style={[styles.filterText, filter === 'delivered' && styles.filterTextActive]}>
+                Livrées
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
 
-      {filteredOrders.length === 0 && !loading && !error ? (
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="receipt-long" size={64} color="#9ca3af" />
-          <Text style={styles.emptyTitle}>
-            {activeTab === 'all' ? 'Aucune commande' : 
-             activeTab === 'active' ? 'Aucune commande en cours' :
-             activeTab === 'delivered' ? 'Aucune commande livrée' :
-             'Aucune commande annulée'}
-          </Text>
-          <Text style={styles.emptyText}>
-            {activeTab === 'all' ? 
-              'Vous n\'avez pas encore passé de commande.' :
-              'Aucune commande ne correspond à ce filtre pour le moment.'
-            }
-          </Text>
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+              onPress={() => setActiveTab('all')}
+            >
+              <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                Toutes ({filteredOrders.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'recent' && styles.tabActive]}
+              onPress={() => setActiveTab('recent')}
+            >
+              <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>
+                Récentes ({recentOrders.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'past3months' && styles.tabActive]}
+              onPress={() => setActiveTab('past3months')}
+            >
+              <Text style={[styles.tabText, activeTab === 'past3months' && styles.tabTextActive]}>
+                3 mois ({past3MonthsOrders.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'older' && styles.tabActive]}
+              onPress={() => setActiveTab('older')}
+            >
+              <Text style={[styles.tabText, activeTab === 'older' && styles.tabTextActive]}>
+                Anciennes ({olderOrders.length})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
-      ) : (
+
+        {/* Orders List */}
         <FlatList
-          data={filteredOrders}
+          data={getCurrentTabOrders()}
           renderItem={renderOrderItem}
           keyExtractor={(item) => item.id}
-          style={styles.listContainer}
-          contentContainerStyle={styles.contentContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor="#000000"
-            />
-          }
+          style={styles.ordersList}
+          contentContainerStyle={styles.ordersListContent}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmptyState}
         />
-      )}
+      </View>
+
+      {/* Order Details Modal */}
+      <Modal
+        visible={showOrderDetails}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        {selectedOrder && (
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity 
+                onPress={() => setShowOrderDetails(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="black" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Détails de la commande</Text>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {/* Order Status */}
+              <View style={styles.modalSection}>
+                <View style={styles.statusSection}>
+                  <View style={styles.statusInfo}>
+                    <StatusIcon status={selectedOrder.status} size={24} />
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) }]}>
+                      <Text style={[styles.statusText, { color: getStatusTextColor(selectedOrder.status) }]}>
+                        {selectedOrder.status === 'pending' && 'En attente'}
+                        {selectedOrder.status === 'confirmed' && 'Confirmée'}
+                        {selectedOrder.status === 'preparing' && 'En préparation'}
+                        {selectedOrder.status === 'ready' && 'Prête'}
+                        {selectedOrder.status === 'picked_up' && 'En livraison'}
+                        {selectedOrder.status === 'delivered' && 'Livrée'}
+                        {selectedOrder.status === 'cancelled' && 'Annulée'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.orderTotal}>Total: {formatCurrency(selectedOrder.total)}</Text>
+                </View>
+              </View>
+
+              {/* Order Items */}
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Articles commandés</Text>
+                {selectedOrder.items.map((item, index) => (
+                  <View key={index} style={styles.itemCard}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemQuantity}>Quantité: {item.quantity}</Text>
+                      {item.specialInstructions && (
+                        <Text style={styles.itemNote}>Note: {item.specialInstructions}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.itemPrice}>
+                      {formatCurrency(item.price * item.quantity)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Delivery Information */}
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Informations de livraison</Text>
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoLabel}>Adresse:</Text> {selectedOrder.deliveryAddress}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoLabel}>Méthode:</Text> {selectedOrder.deliveryMethod === 'delivery' ? 'Livraison' : 'Retrait'}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoLabel}>Restaurant:</Text> {selectedOrder.businessName}
+                  </Text>
+                  {selectedOrder.driverName && (
+                    <Text style={styles.infoText}>
+                      <Text style={styles.infoLabel}>Livreur:</Text> {selectedOrder.driverName}
+                    </Text>
+                  )}
+                  {selectedOrder.driverPhone && (
+                    <Text style={styles.infoText}>
+                      <Text style={styles.infoLabel}>Téléphone livreur:</Text> {selectedOrder.driverPhone}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Payment Information */}
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionTitle}>Informations de paiement</Text>
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoLabel}>Méthode:</Text> {selectedOrder.paymentMethod}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoLabel}>Livraison estimée:</Text> {formatDate(selectedOrder.estimatedDelivery)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              {selectedOrder.status === 'pending' && (
+                <View style={styles.modalSection}>
+                  <TouchableOpacity 
+                    style={styles.cancelOrderButton}
+                    onPress={() => handleCancelOrder(selectedOrder.id)}
+                  >
+                    <Text style={styles.cancelOrderButtonText}>Annuler la commande</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -354,76 +512,35 @@ export default function OrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    marginBottom: 8,
+  },
+  backButton: {
+    padding: 4,
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000',
+    marginLeft: 12,
   },
-  tabsContainer: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  tabsContent: {
-    paddingHorizontal: 16,
-  },
-  tabButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-  },
-  tabButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  tabButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  tabButtonTextActive: {
-    color: '#fff',
-  },
-  tabBadge: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  tabBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  tabBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  tabBadgeTextActive: {
-    color: '#fff',
-  },
-  listContainer: {
+  content: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 16,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
   },
   errorContainer: {
     flex: 1,
@@ -433,13 +550,13 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#ef4444',
+    color: '#E31837',
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#E31837',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -448,6 +565,82 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    fontSize: 16,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#E31837',
+  },
+  filterText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+  tabsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+  },
+  tabActive: {
+    backgroundColor: '#E31837',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#fff',
+  },
+  ordersList: {
+    flex: 1,
+  },
+  ordersListContent: {
+    paddingHorizontal: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -458,25 +651,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#374151',
+    color: '#666',
     marginTop: 16,
   },
   emptyText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#999',
     textAlign: 'center',
     marginTop: 8,
   },
   orderCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 1,
   },
   orderHeader: {
     flexDirection: 'row',
@@ -488,16 +675,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   businessName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
     marginBottom: 4,
   },
   orderDate: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: 13,
+    color: '#666',
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -505,104 +694,134 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#fff',
+    marginLeft: 4,
   },
   orderDetails: {
     marginBottom: 12,
   },
   orderTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
     marginBottom: 4,
   },
-  paymentMethod: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  itemsContainer: {
-    marginBottom: 12,
-  },
-  itemsTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    marginRight: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 2,
-  },
-  itemInstructions: {
-    fontSize: 12,
-    color: '#9ca3af',
-    fontStyle: 'italic',
-    marginTop: 1,
-  },
-  moreItems: {
-    fontSize: 14,
-    color: '#9ca3af',
-    fontStyle: 'italic',
+  itemsCount: {
+    fontSize: 13,
+    color: '#666',
   },
   orderActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    alignItems: 'center',
   },
-  cancelButton: {
+  viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    marginRight: 8,
   },
-  cancelButtonText: {
+  viewButtonText: {
     fontSize: 14,
-    color: '#ef4444',
-    marginLeft: 4,
-  },
-  rateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-  },
-  rateButtonText: {
-    fontSize: 14,
-    color: '#f59e0b',
-    marginLeft: 4,
-  },
-  ratingContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fef3c7',
-    borderRadius: 6,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#92400e',
+    color: '#E31837',
     fontWeight: '500',
+    marginRight: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  modalSection: {
+    marginBottom: 24,
+  },
+  statusSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+  },
+  itemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#000',
+    marginBottom: 4,
+  },
+  itemQuantity: {
+    fontSize: 13,
+    color: '#666',
+  },
+  itemNote: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  itemPrice: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+  },
+  infoCard: {
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderRadius: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#000',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontWeight: '600',
+  },
+  cancelOrderButton: {
+    backgroundColor: '#E31837',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelOrderButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
