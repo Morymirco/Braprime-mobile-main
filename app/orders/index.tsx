@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import React, { useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     FlatList,
     Image,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -17,7 +19,8 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { useOrders } from '../../hooks/useOrders';
 import { useToast } from '../../hooks/useToast';
 import { Order } from '../../lib/services/OrderService';
-import { formatDate, formatPrice } from '../../lib/utils';
+
+type FilterTab = 'all' | 'active' | 'delivered' | 'cancelled';
 
 export default function OrdersScreen() {
   const { orders, loading, error, refetch, cancelOrder, rateOrder } = useOrders();
@@ -26,6 +29,23 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
   const [ratingOrder, setRatingOrder] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+
+  // Filtrer les commandes selon l'onglet actif
+  const filteredOrders = useMemo(() => {
+    switch (activeTab) {
+      case 'active':
+        return orders.filter(order => 
+          ['pending', 'confirmed', 'preparing', 'ready', 'picked_up'].includes(order.status)
+        );
+      case 'delivered':
+        return orders.filter(order => order.status === 'delivered');
+      case 'cancelled':
+        return orders.filter(order => order.status === 'cancelled');
+      default:
+        return orders;
+    }
+  }, [orders, activeTab]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -39,23 +59,49 @@ export default function OrdersScreen() {
     }
   };
 
-  const handleCancelOrder = async (orderId: string) => {
+  const getStatusColor = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'confirmed': return '#3b82f6';
+      case 'preparing': return '#f97316';
+      case 'ready': return '#10b981';
+      case 'picked_up': return '#8b5cf6';
+      case 'delivered': return '#059669';
+      case 'cancelled': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusLabel = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return 'En attente';
+      case 'confirmed': return 'Confirmée';
+      case 'preparing': return 'En préparation';
+      case 'ready': return 'Prête';
+      case 'picked_up': return 'En livraison';
+      case 'delivered': return 'Livrée';
+      case 'cancelled': return 'Annulée';
+      default: return status;
+    }
+  };
+
+  const handleCancelOrder = (orderId: string) => {
     Alert.alert(
       'Annuler la commande',
       'Êtes-vous sûr de vouloir annuler cette commande ?',
       [
-        { text: 'Non', style: 'cancel' },
+        { text: 'Annuler', style: 'cancel' },
         {
           text: 'Oui',
           style: 'destructive',
           onPress: async () => {
             setCancellingOrder(orderId);
             try {
-              const { error } = await cancelOrder(orderId);
-              if (error) {
-                showToast('error', error);
-              } else {
+              const result = await cancelOrder(orderId);
+              if (result.success) {
                 showToast('success', 'Commande annulée avec succès');
+              } else {
+                showToast('error', result.error || 'Erreur lors de l\'annulation');
               }
             } catch (err) {
               showToast('error', 'Erreur lors de l\'annulation');
@@ -68,64 +114,67 @@ export default function OrdersScreen() {
     );
   };
 
-  const handleRateOrder = async (orderId: string, rating: number, review?: string) => {
-    setRatingOrder(orderId);
-    try {
-      const { success, error } = await rateOrder(orderId, rating, review);
-      if (success) {
-        showToast('success', 'Avis ajouté avec succès');
-      } else {
-        showToast('error', error || 'Erreur lors de l\'ajout de l\'avis');
-      }
-    } catch (err) {
-      showToast('error', 'Erreur lors de l\'ajout de l\'avis');
-    } finally {
-      setRatingOrder(null);
-    }
-  };
-
-  const getStatusColor = (status: Order['status']) => {
-    const statusColors = {
-      pending: '#FFA500',
-      confirmed: '#007AFF',
-      preparing: '#FF6B35',
-      ready: '#28A745',
-      picked_up: '#17A2B8',
-      delivered: '#6C757D',
-      cancelled: '#DC3545',
-    };
-    return statusColors[status] || '#6C757D';
-  };
-
-  const getStatusText = (status: Order['status']) => {
-    const statusTexts = {
-      pending: 'En attente',
-      confirmed: 'Confirmée',
-      preparing: 'En préparation',
-      ready: 'Prête',
-      picked_up: 'En livraison',
-      delivered: 'Livrée',
-      cancelled: 'Annulée',
-    };
-    return statusTexts[status] || status;
+  const handleRateOrder = (orderId: string) => {
+    Alert.prompt(
+      'Noter la commande',
+      'Donnez une note de 1 à 5 étoiles',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Noter',
+          onPress: async (rating) => {
+            const numRating = parseInt(rating || '0');
+            if (numRating >= 1 && numRating <= 5) {
+              setRatingOrder(orderId);
+              try {
+                const result = await rateOrder(orderId, numRating);
+                if (result.success) {
+                  showToast('success', 'Commande notée avec succès');
+                } else {
+                  showToast('error', result.error || 'Erreur lors de la notation');
+                }
+              } catch (err) {
+                showToast('error', 'Erreur lors de la notation');
+              } finally {
+                setRatingOrder(null);
+              }
+            } else {
+              showToast('error', 'La note doit être entre 1 et 5');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '5'
+    );
   };
 
   const renderOrderItem = ({ item }: { item: Order }) => (
     <View style={styles.orderCard}>
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>#{item.id.substring(0, 8)}</Text>
           <Text style={styles.businessName}>{item.business_name}</Text>
-          <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
+          <Text style={styles.orderDate}>
+            {new Date(item.created_at).toLocaleDateString('fr-FR')}
+          </Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+          <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
         </View>
       </View>
 
       <View style={styles.orderDetails}>
-        <View style={styles.itemsSection}>
-          <Text style={styles.sectionTitle}>Articles ({item.items.length})</Text>
+        <Text style={styles.orderTotal}>
+          Total: {item.grand_total.toLocaleString()} CFA
+        </Text>
+        <Text style={styles.paymentMethod}>
+          Paiement: {item.payment_method === 'cash' ? 'Espèces' : item.payment_method}
+        </Text>
+      </View>
+
+      {item.items && item.items.length > 0 && (
+        <View style={styles.itemsContainer}>
+          <Text style={styles.itemsTitle}>Articles:</Text>
           {item.items.slice(0, 3).map((orderItem, index) => (
             <View key={index} style={styles.itemRow}>
               {orderItem.image && (
@@ -151,93 +200,69 @@ export default function OrdersScreen() {
             <Text style={styles.moreItems}>+{item.items.length - 3} autres articles</Text>
           )}
         </View>
-
-        <View style={styles.totalsSection}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Sous-total:</Text>
-            <Text style={styles.totalValue}>{formatPrice(item.total)}</Text>
-          </View>
-          {item.delivery_fee > 0 && (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Livraison:</Text>
-              <Text style={styles.totalValue}>{formatPrice(item.delivery_fee)}</Text>
-            </View>
-          )}
-          {item.tax > 0 && (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Taxes:</Text>
-              <Text style={styles.totalValue}>{formatPrice(item.tax)}</Text>
-            </View>
-          )}
-          <View style={[styles.totalRow, styles.grandTotal]}>
-            <Text style={styles.grandTotalLabel}>Total:</Text>
-            <Text style={styles.grandTotalValue}>{formatPrice(item.grand_total)}</Text>
-          </View>
-        </View>
-
-        {item.delivery_address && (
-          <View style={styles.deliverySection}>
-            <Text style={styles.sectionTitle}>Adresse de livraison</Text>
-            <Text style={styles.deliveryAddress}>{item.delivery_address}</Text>
-          </View>
-        )}
-
-        {item.customer_rating && (
-          <View style={styles.ratingSection}>
-            <Text style={styles.sectionTitle}>Votre avis</Text>
-            <View style={styles.ratingDisplay}>
-              <Text style={styles.stars}>{'⭐'.repeat(item.customer_rating)}</Text>
-              {item.customer_review && (
-                <Text style={styles.reviewText}>{item.customer_review}</Text>
-              )}
-            </View>
-          </View>
-        )}
-      </View>
+      )}
 
       <View style={styles.orderActions}>
-        {['pending', 'confirmed'].includes(item.status) && (
+        {item.status === 'pending' && (
           <TouchableOpacity
-            style={[styles.actionButton, styles.cancelButton]}
+            style={styles.cancelButton}
             onPress={() => handleCancelOrder(item.id)}
             disabled={cancellingOrder === item.id}
           >
             {cancellingOrder === item.id ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#ef4444" />
             ) : (
-              <Text style={styles.cancelButtonText}>Annuler</Text>
+              <>
+                <MaterialIcons name="cancel" size={16} color="#ef4444" />
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </>
             )}
           </TouchableOpacity>
         )}
 
         {item.status === 'delivered' && !item.customer_rating && (
           <TouchableOpacity
-            style={[styles.actionButton, styles.rateButton]}
-            onPress={() => {
-              // Ici vous pourriez ouvrir un modal pour la notation
-              handleRateOrder(item.id, 5, 'Très satisfait !');
-            }}
+            style={styles.rateButton}
+            onPress={() => handleRateOrder(item.id)}
             disabled={ratingOrder === item.id}
           >
             {ratingOrder === item.id ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#f59e0b" />
             ) : (
-              <Text style={styles.rateButtonText}>Noter</Text>
+              <>
+                <MaterialIcons name="star" size={16} color="#f59e0b" />
+                <Text style={styles.rateButtonText}>Noter</Text>
+              </>
             )}
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.detailsButton]}
-          onPress={() => {
-            // Navigation vers les détails de la commande
-            console.log('Voir détails de la commande:', item.id);
-          }}
-        >
-          <Text style={styles.detailsButtonText}>Détails</Text>
-        </TouchableOpacity>
+        {item.customer_rating && (
+          <View style={styles.ratingContainer}>
+            <Text style={styles.ratingText}>
+              Votre note: {item.customer_rating}/5 ⭐
+            </Text>
+          </View>
+        )}
       </View>
     </View>
+  );
+
+  const renderTabButton = (tab: FilterTab, label: string, count: number) => (
+    <TouchableOpacity
+      key={tab}
+      style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
+      onPress={() => setActiveTab(tab)}
+    >
+      <Text style={[styles.tabButtonText, activeTab === tab && styles.tabButtonTextActive]}>
+        {label}
+      </Text>
+      <View style={[styles.tabBadge, activeTab === tab && styles.tabBadgeActive]}>
+        <Text style={[styles.tabBadgeText, activeTab === tab && styles.tabBadgeTextActive]}>
+          {count}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 
   if (loading && !refreshing) {
@@ -247,10 +272,17 @@ export default function OrdersScreen() {
           <Text style={styles.title}>Mes Commandes</Text>
           <SyncStatus />
         </View>
-        <OrdersSkeleton />
+        <OrdersSkeleton count={5} />
       </SafeAreaView>
     );
   }
+
+  // Compter les commandes par statut
+  const activeCount = orders.filter(order => 
+    ['pending', 'confirmed', 'preparing', 'ready', 'picked_up'].includes(order.status)
+  ).length;
+  const deliveredCount = orders.filter(order => order.status === 'delivered').length;
+  const cancelledCount = orders.filter(order => order.status === 'cancelled').length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -259,28 +291,52 @@ export default function OrdersScreen() {
         <SyncStatus />
       </View>
 
+      {/* Onglets de filtre */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabsContainer}
+        contentContainerStyle={styles.tabsContent}
+      >
+        {renderTabButton('all', 'Toutes', orders.length)}
+        {renderTabButton('active', 'En cours', activeCount)}
+        {renderTabButton('delivered', 'Livrées', deliveredCount)}
+        {renderTabButton('cancelled', 'Annulées', cancelledCount)}
+      </ScrollView>
+
       {error && (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Ionicons name="alert-circle" size={48} color="#ef4444" />
+          <Text style={styles.errorText}>Erreur: {error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-            <Text style={styles.retryButtonText}>Réessayer</Text>
+            <Text style={styles.retryText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {orders.length === 0 && !loading && !error ? (
+      {filteredOrders.length === 0 && !loading && !error ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>Aucune commande</Text>
+          <MaterialIcons name="receipt-long" size={64} color="#9ca3af" />
+          <Text style={styles.emptyTitle}>
+            {activeTab === 'all' ? 'Aucune commande' : 
+             activeTab === 'active' ? 'Aucune commande en cours' :
+             activeTab === 'delivered' ? 'Aucune commande livrée' :
+             'Aucune commande annulée'}
+          </Text>
           <Text style={styles.emptyText}>
-            Vous n'avez pas encore passé de commande. Parcourez nos commerces et découvrez nos délicieuses offres !
+            {activeTab === 'all' ? 
+              'Vous n\'avez pas encore passé de commande.' :
+              'Aucune commande ne correspond à ce filtre pour le moment.'
+            }
           </Text>
         </View>
       ) : (
         <FlatList
-          data={orders}
+          data={filteredOrders}
           renderItem={renderOrderItem}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
+          style={styles.listContainer}
+          contentContainerStyle={styles.contentContainer}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -298,7 +354,7 @@ export default function OrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
@@ -315,104 +371,163 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
   },
-  errorContainer: {
-    padding: 20,
+  tabsContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  tabButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  tabButtonTextActive: {
+    color: '#fff',
+  },
+  tabBadge: {
+    backgroundColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+    minWidth: 20,
     alignItems: 'center',
   },
+  tabBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  tabBadgeTextActive: {
+    color: '#fff',
+  },
+  listContainer: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   errorText: {
-    color: '#DC3545',
+    fontSize: 16,
+    color: '#ef4444',
     textAlign: 'center',
-    marginBottom: 10,
+    marginTop: 12,
+    marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ef4444',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    padding: 20,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
-    color: '#000',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginTop: 16,
   },
   emptyText: {
+    fontSize: 16,
+    color: '#6b7280',
     textAlign: 'center',
-    lineHeight: 18,
-    opacity: 0.7,
-    color: '#666',
-  },
-  listContainer: {
-    padding: 8,
+    marginTop: 8,
   },
   orderCard: {
     backgroundColor: '#fff',
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 16,
-    paddingBottom: 8,
+    marginBottom: 12,
   },
   orderInfo: {
     flex: 1,
   },
-  orderId: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 2,
-    color: '#000',
-  },
   businessName: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 2,
-    color: '#000',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
   },
   orderDate: {
-    fontSize: 11,
-    opacity: 0.6,
-    color: '#666',
+    fontSize: 14,
+    color: '#6b7280',
   },
   statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    minWidth: 70,
-    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   statusText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
+    color: '#fff',
   },
   orderDetails: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    marginBottom: 12,
   },
-  itemsSection: {
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+  orderTotal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
     marginBottom: 4,
-    color: '#000',
+  },
+  paymentMethod: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  itemsContainer: {
+    marginBottom: 12,
+  },
+  itemsTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 4,
   },
   itemRow: {
     flexDirection: 'row',
@@ -430,116 +545,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemText: {
-    fontSize: 12,
-    marginBottom: 1,
-    color: '#000',
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
   },
   itemInstructions: {
-    fontSize: 10,
-    color: '#666',
+    fontSize: 12,
+    color: '#9ca3af',
     fontStyle: 'italic',
     marginTop: 1,
   },
   moreItems: {
-    fontSize: 11,
-    opacity: 0.6,
-    fontStyle: 'italic',
-    color: '#666',
-    marginTop: 2,
-  },
-  totalsSection: {
-    marginBottom: 8,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  totalLabel: {
-    fontSize: 12,
-    color: '#000',
-  },
-  totalValue: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#000',
-  },
-  grandTotal: {
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    paddingTop: 4,
-    marginTop: 4,
-  },
-  grandTotalLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000',
-  },
-  grandTotalValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000',
-  },
-  deliverySection: {
-    marginBottom: 8,
-  },
-  deliveryAddress: {
-    fontSize: 12,
-    opacity: 0.7,
-    color: '#666',
-  },
-  ratingSection: {
-    marginBottom: 8,
-  },
-  ratingDisplay: {
-    alignItems: 'flex-start',
-  },
-  stars: {
     fontSize: 14,
-    marginBottom: 2,
-  },
-  reviewText: {
-    fontSize: 12,
-    opacity: 0.7,
+    color: '#9ca3af',
     fontStyle: 'italic',
-    color: '#666',
   },
   orderActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 6,
-  },
-  actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-    minWidth: 70,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#DC3545',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    marginRight: 8,
   },
   cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#ef4444',
+    marginLeft: 4,
   },
   rateButton: {
-    backgroundColor: '#FFC107',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
   },
   rateButtonText: {
-    color: '#000000',
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#f59e0b',
+    marginLeft: 4,
   },
-  detailsButton: {
-    backgroundColor: '#007AFF',
+  ratingContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
   },
-  detailsButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+  ratingText: {
+    fontSize: 14,
+    color: '#92400e',
     fontWeight: '500',
   },
 }); 
