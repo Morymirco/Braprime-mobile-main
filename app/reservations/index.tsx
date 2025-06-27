@@ -189,7 +189,7 @@ export default function ReservationsScreen() {
       </Text>
       <TouchableOpacity 
         style={styles.newReservationButton}
-        onPress={() => router.push('/')}
+        onPress={() => router.push('/reservations/create')}
       >
         <Text style={styles.newReservationButtonText}>Faire une réservation</Text>
       </TouchableOpacity>
@@ -293,6 +293,14 @@ export default function ReservationsScreen() {
           ListEmptyComponent={renderEmptyState}
         />
       </View>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => router.push('/reservations/create')}
+      >
+        <Ionicons name="add" size={24} color="#fff" />
+      </TouchableOpacity>
 
       {/* Reservation Details Modal */}
       <Modal
@@ -722,5 +730,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#E31837',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 }); 
