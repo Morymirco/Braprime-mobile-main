@@ -38,13 +38,13 @@ const OrdersList = () => {
       'Annuler la commande',
       'Êtes-vous sûr de vouloir annuler cette commande ?',
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: 'Non', style: 'cancel' },
         {
           text: 'Oui',
           style: 'destructive',
           onPress: async () => {
             const result = await cancelOrder(orderId);
-            if (result.success) {
+            if (!result.error) {
               Alert.alert('Succès', 'Commande annulée avec succès');
             } else {
               Alert.alert('Erreur', result.error || 'Erreur lors de l\'annulation');

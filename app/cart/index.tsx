@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
     Alert,
     Image,
+    Modal,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -18,6 +19,173 @@ import ToastContainer from '../../components/ToastContainer';
 import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../lib/contexts/AuthContext';
+import { MenuItemWithCategory } from '../../lib/services/MenuService';
+
+// Composant personnalisé pour les détails d'article du panier
+interface CartItemDetailProps {
+  item: any;
+  visible: boolean;
+  onClose: () => void;
+  onUpdateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  onRemove: (itemId: string) => Promise<void>;
+}
+
+function CartItemDetail({ item, visible, onClose, onUpdateQuantity, onRemove }: CartItemDetailProps) {
+  const [quantity, setQuantity] = useState(item?.quantity || 1);
+
+  if (!item) return null;
+
+  const handleQuantityChange = async (newQuantity: number) => {
+    if (newQuantity >= 1 && newQuantity <= 99) {
+      // Mise à jour optimiste immédiate
+      setQuantity(newQuantity);
+      
+      // Mise à jour en arrière-plan sans bloquer l'interface
+      onUpdateQuantity(item.id, newQuantity).catch((error) => {
+        // En cas d'erreur, on peut afficher un toast mais ne pas bloquer l'interface
+        console.error('Erreur lors de la mise à jour de la quantité:', error);
+      });
+    }
+  };
+
+  const handleRemove = async () => {
+    try {
+      await onRemove(item.id);
+      onClose();
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+    }
+  };
+
+  const totalPrice = item.price * quantity;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        {/* Header */}
+        <View style={styles.modalHeader}>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <MaterialIcons name="close" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.modalHeaderTitle}>Détails de l'article</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          {/* Image */}
+          {item.image && (
+            <Image
+              source={{ uri: item.image }}
+              style={styles.modalImage}
+              resizeMode="cover"
+            />
+          )}
+
+          {/* Informations principales */}
+          <View style={styles.modalMainInfo}>
+            <Text style={styles.modalTitle}>{item.name}</Text>
+            <Text style={styles.modalPrice}>{item.price.toLocaleString()} GNF</Text>
+
+            {item.description && (
+              <Text style={styles.modalDescription}>{item.description}</Text>
+            )}
+
+            {/* Quantité actuelle */}
+            <View style={styles.modalQuantitySection}>
+              <Text style={styles.modalSectionTitle}>Quantité dans le panier</Text>
+              <View style={styles.modalQuantitySelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalQuantityButton,
+                    quantity <= 1 && styles.modalQuantityButtonDisabled
+                  ]}
+                  onPress={() => handleQuantityChange(quantity - 1)}
+                  disabled={quantity <= 1}
+                >
+                  <MaterialIcons 
+                    name="remove" 
+                    size={20} 
+                    color={quantity <= 1 ? "#CCC" : "#E31837"} 
+                  />
+                </TouchableOpacity>
+                
+                <Text style={styles.modalQuantityText}>
+                  {quantity}
+                </Text>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.modalQuantityButton,
+                    quantity >= 99 && styles.modalQuantityButtonDisabled
+                  ]}
+                  onPress={() => handleQuantityChange(quantity + 1)}
+                  disabled={quantity >= 99}
+                >
+                  <MaterialIcons 
+                    name="add" 
+                    size={20} 
+                    color={quantity >= 99 ? "#CCC" : "#E31837"} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Instructions spéciales */}
+            {item.special_instructions && (
+              <View style={styles.modalInstructionsSection}>
+                <Text style={styles.modalSectionTitle}>Instructions spéciales</Text>
+                <Text style={styles.modalInstructionsText}>
+                  {item.special_instructions}
+                </Text>
+              </View>
+            )}
+
+            {/* Informations du commerce */}
+            <View style={styles.modalBusinessSection}>
+              <Text style={styles.modalSectionTitle}>Commerce</Text>
+              <View style={styles.modalBusinessInfo}>
+                <MaterialIcons name="store" size={16} color="#666" />
+                <Text style={styles.modalBusinessName}>
+                  {item.business_name || 'Commerce'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Actions */}
+        <View style={styles.modalActionContainer}>
+          <View style={styles.modalTotalContainer}>
+            <Text style={styles.modalTotalLabel}>Total:</Text>
+            <Text style={styles.modalTotalPrice}>{totalPrice.toLocaleString()} GNF</Text>
+          </View>
+          
+          <View style={styles.modalButtonsContainer}>
+            <TouchableOpacity
+              style={styles.modalRemoveButton}
+              onPress={handleRemove}
+            >
+              <MaterialIcons name="delete-outline" size={20} color="#E31837" />
+              <Text style={styles.modalRemoveButtonText}>Supprimer</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={onClose}
+            >
+              <Text style={styles.modalCloseButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export default function CartScreen() {
   const { user } = useAuth();
@@ -36,6 +204,8 @@ export default function CartScreen() {
   } = useCart();
   const { showToast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
   const router = useRouter();
 
   const handleRefresh = async () => {
@@ -50,16 +220,44 @@ export default function CartScreen() {
     }
   };
 
+  const handleMenuItemPress = (item: any) => {
+    setSelectedMenuItem(item);
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedMenuItem(null);
+  };
+
+  const handleModalUpdateQuantity = async (itemId: string, quantity: number) => {
+    // Mise à jour optimiste - on ne bloque pas l'interface
+    updateQuantity(itemId, quantity).catch((error) => {
+      console.error('Erreur lors de la mise à jour de la quantité:', error);
+      showToast('error', 'Erreur lors de la mise à jour de la quantité');
+    });
+  };
+
+  const handleModalRemove = async (itemId: string) => {
+    const { success, error } = await removeFromCart(itemId);
+    if (success) {
+      showToast('success', 'Article supprimé du panier');
+    } else {
+      showToast('error', error || 'Impossible de supprimer l\'article');
+    }
+  };
+
   const handleQuantityChange = async (itemId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
-      await handleRemoveItem(itemId, '');
+      await handleModalRemove(itemId);
       return;
     }
 
-    const { success, error } = await updateQuantity(itemId, newQuantity);
-    if (!success) {
-      showToast('error', error || 'Impossible de mettre à jour la quantité');
-    }
+    // Mise à jour optimiste - on ne bloque pas l'interface
+    updateQuantity(itemId, newQuantity).catch((error) => {
+      console.error('Erreur lors de la mise à jour de la quantité:', error);
+      showToast('error', 'Erreur lors de la mise à jour de la quantité');
+    });
   };
 
   const handleRemoveItem = async (itemId: string, itemName: string) => {
@@ -73,21 +271,13 @@ export default function CartScreen() {
             text: 'Supprimer',
             style: 'destructive',
             onPress: async () => {
-              const { success, error } = await removeFromCart(itemId);
-              if (success) {
-                showToast('success', 'Article supprimé du panier');
-              } else {
-                showToast('error', error || 'Impossible de supprimer l\'article');
-              }
+              await handleModalRemove(itemId);
             }
           }
         ]
       );
     } else {
-      const { success, error } = await removeFromCart(itemId);
-      if (!success) {
-        showToast('error', error || 'Impossible de supprimer l\'article');
-      }
+      await handleModalRemove(itemId);
     }
   };
 
@@ -119,6 +309,12 @@ export default function CartScreen() {
       return;
     }
     router.push('/checkout');
+  };
+
+  const handleAddToCart = async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
+    // Cette fonction ne sera pas utilisée dans le contexte du panier
+    // car on ne peut pas ajouter depuis le modal dans le panier
+    showToast('info', 'Utilisez les boutons +/- pour modifier la quantité');
   };
 
   if (!user) {
@@ -213,7 +409,12 @@ export default function CartScreen() {
             const isRemoving = loadingStates.removeFromCart[item.id];
             
             return (
-              <View key={item.id} style={styles.itemCard}>
+              <TouchableOpacity 
+                key={item.id} 
+                style={styles.itemCard}
+                onPress={() => handleMenuItemPress(item)}
+                activeOpacity={0.7}
+              >
                 <Image
                   source={{
                     uri: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&q=80'
@@ -225,7 +426,10 @@ export default function CartScreen() {
                   <View style={styles.itemHeader}>
                     <Text style={styles.itemName}>{item.name}</Text>
                     <TouchableOpacity
-                      onPress={() => handleRemoveItem(item.id, item.name)}
+                      onPress={(e) => {
+                        e.stopPropagation(); // Empêcher l'ouverture du modal
+                        handleRemoveItem(item.id, item.name);
+                      }}
                       style={[
                         styles.removeButton,
                         isRemoving && styles.removeButtonLoading
@@ -255,43 +459,42 @@ export default function CartScreen() {
                       <TouchableOpacity
                         style={[
                           styles.quantityButton,
-                          (item.quantity <= 1 || isUpdatingQuantity) && styles.quantityButtonDisabled
+                          item.quantity <= 1 && styles.quantityButtonDisabled
                         ]}
-                        onPress={() => handleQuantityChange(item.id, item.quantity - 1)}
-                        disabled={item.quantity <= 1 || isUpdatingQuantity}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Empêcher l'ouverture du modal
+                          handleQuantityChange(item.id, item.quantity - 1);
+                        }}
+                        disabled={item.quantity <= 1}
                       >
                         <MaterialIcons 
                           name="remove" 
                           size={20} 
-                          color={item.quantity <= 1 || isUpdatingQuantity ? "#CCC" : "#E31837"} 
+                          color={item.quantity <= 1 ? "#CCC" : "#E31837"} 
                         />
                       </TouchableOpacity>
                       
-                      <Text style={[
-                        styles.quantityText,
-                        isUpdatingQuantity && styles.quantityTextLoading
-                      ]}>
-                        {isUpdatingQuantity ? '...' : item.quantity}
+                      <Text style={styles.quantityText}>
+                        {item.quantity}
                       </Text>
                       
                       <TouchableOpacity
-                        style={[
-                          styles.quantityButton,
-                          isUpdatingQuantity && styles.quantityButtonDisabled
-                        ]}
-                        onPress={() => handleQuantityChange(item.id, item.quantity + 1)}
-                        disabled={isUpdatingQuantity}
+                        style={styles.quantityButton}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Empêcher l'ouverture du modal
+                          handleQuantityChange(item.id, item.quantity + 1);
+                        }}
                       >
                         <MaterialIcons 
                           name="add" 
                           size={20} 
-                          color={isUpdatingQuantity ? "#CCC" : "#E31837"} 
+                          color="#E31837" 
                         />
                       </TouchableOpacity>
                     </View>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -357,6 +560,15 @@ export default function CartScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal de détail de l'article */}
+      <CartItemDetail
+        item={selectedMenuItem}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onUpdateQuantity={handleModalUpdateQuantity}
+        onRemove={handleModalRemove}
+      />
     </SafeAreaView>
   );
 }
@@ -468,9 +680,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     minWidth: 20,
     textAlign: 'center',
-  },
-  quantityTextLoading: {
-    color: '#CCC',
   },
   actionsContainer: {
     paddingHorizontal: 16,
@@ -615,6 +824,185 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  placeholder: {
+    width: 32,
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalImage: {
+    width: '100%',
+    height: 250,
+  },
+  modalMainInfo: {
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+  },
+  modalPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#E31837',
+    marginBottom: 12,
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 16,
+  },
+  modalQuantitySection: {
+    marginBottom: 16,
+  },
+  modalSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+  },
+  modalQuantitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: 8,
+  },
+  modalQuantityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E31837',
+  },
+  modalQuantityButtonDisabled: {
+    borderColor: '#CCC',
+    backgroundColor: '#f0f0f0',
+  },
+  modalQuantityText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginHorizontal: 20,
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  modalInstructionsSection: {
+    marginBottom: 16,
+  },
+  modalInstructionsText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 8,
+  },
+  modalBusinessSection: {
+    marginBottom: 16,
+  },
+  modalBusinessInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 8,
+  },
+  modalBusinessName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginLeft: 8,
+  },
+  modalActionContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  modalTotalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTotalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  modalTotalPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#E31837',
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalRemoveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#E31837',
+  },
+  modalRemoveButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  modalCloseButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  modalCloseButtonText: {
+    color: '#000',
     fontSize: 16,
     fontWeight: '600',
   },

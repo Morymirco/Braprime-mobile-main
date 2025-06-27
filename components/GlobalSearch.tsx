@@ -37,13 +37,17 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
   const handleBusinessPress = (business: BusinessWithType) => {
     // Navigation vers la page détaillée du commerce
     console.log('Navigation vers le commerce:', business.name);
-    // TODO: Implémenter la navigation vers la page détaillée
+    router.push(`/businesses/${business.id}`);
   };
 
   const handleMenuItemPress = (menuItem: any) => {
     // Navigation vers la page du commerce avec l'élément sélectionné
     console.log('Navigation vers l\'élément de menu:', menuItem.name);
-    // TODO: Implémenter la navigation vers la page du commerce
+    if (menuItem.business?.id) {
+      router.push(`/businesses/${menuItem.business.id}/menu`);
+    } else if (menuItem.business_id) {
+      router.push(`/businesses/${menuItem.business_id}/menu`);
+    }
   };
 
   const handleClearSearch = () => {

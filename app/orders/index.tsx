@@ -44,6 +44,8 @@ interface LocalOrder {
   estimatedDelivery: Date;
   driverName?: string;
   driverPhone?: string;
+  customer_rating?: number;
+  customer_review?: string;
 }
 
 // Helper function to get status badge color
@@ -140,7 +142,9 @@ export default function OrdersScreen() {
     paymentMethod: order.payment_method,
     estimatedDelivery: new Date(order.estimated_delivery || order.created_at),
     driverName: order.driver_name,
-    driverPhone: order.driver_phone
+    driverPhone: order.driver_phone,
+    customer_rating: order.customer_rating,
+    customer_review: order.customer_review
   })), [orders]);
 
   // Filter orders based on selected filter and search term
@@ -198,7 +202,7 @@ export default function OrdersScreen() {
           style: 'destructive',
           onPress: async () => {
             const result = await cancelOrder(orderId);
-            if (result.success) {
+            if (!result.error) {
               setShowOrderDetails(false);
               setSelectedOrder(null);
               Alert.alert('Succès', 'Commande annulée avec succès');
@@ -585,9 +589,9 @@ export default function OrdersScreen() {
                       {[1, 2, 3, 4, 5].map((star) => (
                         <MaterialIcons
                           key={star}
-                          name={selectedOrder.customer_rating >= star ? "star" : "star-border"}
+                          name={(selectedOrder.customer_rating || 0) >= star ? "star" : "star-border"}
                           size={20}
-                          color={selectedOrder.customer_rating >= star ? "#f59e0b" : "#d1d5db"}
+                          color={(selectedOrder.customer_rating || 0) >= star ? "#f59e0b" : "#d1d5db"}
                         />
                       ))}
                     </View>

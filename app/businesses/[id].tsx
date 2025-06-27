@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessDetailSkeleton from '../../components/BusinessDetailSkeleton';
+import MenuItemDetail from '../../components/MenuItemDetail';
 import MenuSkeleton from '../../components/MenuSkeleton';
 import ToastContainer from '../../components/ToastContainer';
 import { useBusiness } from '../../hooks/useBusiness';
@@ -43,6 +44,8 @@ export default function BusinessDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -79,13 +82,16 @@ export default function BusinessDetailScreen() {
     setSelectedCategory(selectedCategory === categoryId ? null : categoryId);
   };
 
-  const handleAddToCart = async (item: any) => {
+  const handleMenuItemPress = (item: MenuItemWithCategory) => {
+    setSelectedMenuItem(item);
+    setModalVisible(true);
+  };
+
+  const handleAddToCart = async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
     if (!business) {
       showToast('error', 'Erreur: Commerce non trouvé');
       return;
     }
-
-    setAddingToCart(item.id);
 
     try {
       const result = await addToCart(
@@ -93,24 +99,30 @@ export default function BusinessDetailScreen() {
           menu_item_id: item.id,
           name: item.name,
           price: item.price,
-          quantity: 1,
+          quantity: quantity,
           image: item.image,
+          special_instructions: specialInstructions,
         },
         business.id,
         business.name
       );
 
       if (result.success) {
-        showToast('success', `${item.name} ajouté au panier`);
+        showToast('success', `${quantity}x ${item.name} ajouté au panier`);
+        setModalVisible(false);
+        setSelectedMenuItem(null);
       } else {
         showToast('error', result.error || 'Erreur lors de l\'ajout au panier');
       }
     } catch (error) {
       showToast('error', 'Erreur lors de l\'ajout au panier');
       console.error('Erreur lors de l\'ajout au panier:', error);
-    } finally {
-      setAddingToCart(null);
     }
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedMenuItem(null);
   };
 
   const renderStars = (rating: number) => {
@@ -370,7 +382,7 @@ export default function BusinessDetailScreen() {
                               styles.addButton,
                               addingToCart === item.id && styles.addButtonLoading
                             ]}
-                            onPress={() => handleAddToCart(item)}
+                            onPress={() => handleMenuItemPress(item)}
                             disabled={addingToCart === item.id}
                           >
                             {addingToCart === item.id ? (
@@ -438,6 +450,14 @@ export default function BusinessDetailScreen() {
         {/* Espace en bas pour éviter que le contenu soit caché */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Modal de détail de l'article */}
+      <MenuItemDetail
+        item={selectedMenuItem}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onAddToCart={handleAddToCart}
+      />
     </SafeAreaView>
   );
 }

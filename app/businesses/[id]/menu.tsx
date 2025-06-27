@@ -2,7 +2,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
     Dimensions,
     FlatList,
     Image,
@@ -13,8 +12,12 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MenuItemDetail from '../../../components/MenuItemDetail';
+import ToastContainer from '../../../components/ToastContainer';
 import { useBusiness } from '../../../hooks/useBusiness';
+import { useCart } from '../../../hooks/useCart';
 import { useMenuCategories, useMenuItems } from '../../../hooks/useMenu';
+import { useToast } from '../../../hooks/useToast';
 import { MenuItemWithCategory } from '../../../lib/services/MenuService';
 
 const { width } = Dimensions.get('window');
@@ -25,9 +28,13 @@ export default function BusinessMenuScreen() {
   const { business, loading: businessLoading, error: businessError } = useBusiness(id);
   const { categories, loading: categoriesLoading, error: categoriesError } = useMenuCategories(id);
   const { menuItems, loading: menuItemsLoading, error: menuItemsError } = useMenuItems(id);
+  const { addToCart } = useCart();
+  const { showToast } = useToast();
   
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   // Sélectionner automatiquement la première catégorie si aucune n'est sélectionnée
   useEffect(() => {
@@ -50,18 +57,47 @@ export default function BusinessMenuScreen() {
     router.back();
   };
 
-  const handleAddToCart = (item: MenuItemWithCategory) => {
-    // TODO: Implement cart functionality
-    Alert.alert(
-      'Ajouter au panier',
-      `Voulez-vous ajouter "${item.name}" à votre panier ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Ajouter', onPress: () => {
-          Alert.alert('Succès', `${item.name} ajouté au panier !`);
-        }}
-      ]
-    );
+  const handleMenuItemPress = (item: MenuItemWithCategory) => {
+    setSelectedMenuItem(item);
+    setModalVisible(true);
+  };
+
+  const handleAddToCart = async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
+    if (!business) {
+      showToast('error', 'Erreur: Commerce non trouvé');
+      return;
+    }
+
+    try {
+      const result = await addToCart(
+        {
+          menu_item_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: quantity,
+          image: item.image,
+          special_instructions: specialInstructions,
+        },
+        business.id,
+        business.name
+      );
+
+      if (result.success) {
+        showToast('success', `${quantity}x ${item.name} ajouté au panier`);
+        setModalVisible(false);
+        setSelectedMenuItem(null);
+      } else {
+        showToast('error', result.error || 'Erreur lors de l\'ajout au panier');
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de l\'ajout au panier');
+      console.error('Erreur lors de l\'ajout au panier:', error);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedMenuItem(null);
   };
 
   const renderStars = (rating: number) => {
@@ -92,7 +128,11 @@ export default function BusinessMenuScreen() {
   };
 
   const renderMenuItem = ({ item }: { item: MenuItemWithCategory }) => (
-    <View style={styles.menuItem}>
+    <TouchableOpacity 
+      style={styles.menuItem}
+      onPress={() => handleMenuItemPress(item)}
+      activeOpacity={0.7}
+    >
       <View style={styles.menuItemContent}>
         {/* Image de l'article */}
         {item.image && (
@@ -126,15 +166,15 @@ export default function BusinessMenuScreen() {
             </Text>
             
             <TouchableOpacity
-              style={styles.addToCartButton}
-              onPress={() => handleAddToCart(item)}
+              style={styles.viewDetailsButton}
+              onPress={() => handleMenuItemPress(item)}
             >
-              <MaterialIcons name="add-shopping-cart" size={20} color="#FFF" />
+              <MaterialIcons name="visibility" size={20} color="#E31837" />
             </TouchableOpacity>
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderCategoryTab = ({ item }: { item: any }) => (
@@ -185,6 +225,9 @@ export default function BusinessMenuScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Toast Container */}
+      <ToastContainer />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
@@ -260,6 +303,14 @@ export default function BusinessMenuScreen() {
           </Text>
         </View>
       )}
+
+      {/* Modal de détail de l'article */}
+      <MenuItemDetail
+        item={selectedMenuItem}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onAddToCart={handleAddToCart}
+      />
     </SafeAreaView>
   );
 }
@@ -408,10 +459,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E31837',
   },
-  addToCartButton: {
-    backgroundColor: '#E31837',
+  viewDetailsButton: {
+    borderWidth: 1,
+    borderColor: '#E31837',
     padding: 8,
     borderRadius: 20,
+    backgroundColor: 'transparent',
   },
   menuItemsLoading: {
     flex: 1,

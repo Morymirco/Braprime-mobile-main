@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -7,6 +7,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -18,11 +19,35 @@ interface MenuItemDetailProps {
   item: MenuItemWithCategory | null;
   visible: boolean;
   onClose: () => void;
-  onAddToCart: (item: MenuItemWithCategory) => void;
+  onAddToCart: (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => void;
 }
 
 export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: MenuItemDetailProps) {
+  const [quantity, setQuantity] = useState(1);
+  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+
   if (!item) return null;
+
+  const handleQuantityChange = (newQuantity: number) => {
+    if (newQuantity >= 1 && newQuantity <= 99) {
+      setQuantity(newQuantity);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    setIsAddingToCart(true);
+    try {
+      await onAddToCart(item, quantity, specialInstructions.trim() || undefined);
+      // Reset form after successful add
+      setQuantity(1);
+      setSpecialInstructions('');
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout au panier:', error);
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -50,6 +75,8 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
 
     return stars;
   };
+
+  const totalPrice = item.price * quantity;
 
   return (
     <Modal
@@ -89,6 +116,16 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
               )}
             </View>
 
+            {/* Note et avis */}
+            <View style={styles.ratingContainer}>
+              <View style={styles.starsContainer}>
+                {renderStars(item.rating || 0)}
+              </View>
+              <Text style={styles.ratingText}>
+                {item.rating ? `${item.rating.toFixed(1)}/5` : 'Pas encore noté'}
+              </Text>
+            </View>
+
             <Text style={styles.price}>{item.price.toLocaleString()} GNF</Text>
 
             {item.description && (
@@ -110,6 +147,61 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
                 </Text>
               </View>
             )}
+
+            {/* Sélection de quantité */}
+            <View style={styles.quantityContainer}>
+              <Text style={styles.sectionTitle}>Quantité</Text>
+              <View style={styles.quantitySelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.quantityButton,
+                    quantity <= 1 && styles.quantityButtonDisabled
+                  ]}
+                  onPress={() => handleQuantityChange(quantity - 1)}
+                  disabled={quantity <= 1}
+                >
+                  <MaterialIcons 
+                    name="remove" 
+                    size={20} 
+                    color={quantity <= 1 ? "#CCC" : "#E31837"} 
+                  />
+                </TouchableOpacity>
+                
+                <Text style={styles.quantityText}>{quantity}</Text>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.quantityButton,
+                    quantity >= 99 && styles.quantityButtonDisabled
+                  ]}
+                  onPress={() => handleQuantityChange(quantity + 1)}
+                  disabled={quantity >= 99}
+                >
+                  <MaterialIcons 
+                    name="add" 
+                    size={20} 
+                    color={quantity >= 99 ? "#CCC" : "#E31837"} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Instructions spéciales */}
+            <View style={styles.instructionsContainer}>
+              <Text style={styles.sectionTitle}>Instructions spéciales (optionnel)</Text>
+              <TextInput
+                style={styles.instructionsInput}
+                placeholder="Ex: Sans oignons, bien cuit, etc."
+                value={specialInstructions}
+                onChangeText={setSpecialInstructions}
+                multiline
+                numberOfLines={3}
+                maxLength={200}
+              />
+              <Text style={styles.instructionsCounter}>
+                {specialInstructions.length}/200
+              </Text>
+            </View>
 
             {/* Allergènes */}
             {item.allergens && item.allergens.length > 0 && (
@@ -142,12 +234,27 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
 
         {/* Bouton d'action */}
         <View style={styles.actionContainer}>
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total:</Text>
+            <Text style={styles.totalPrice}>{totalPrice.toLocaleString()} GNF</Text>
+          </View>
+          
           <TouchableOpacity
-            style={styles.addToCartButton}
-            onPress={() => onAddToCart(item)}
+            style={[
+              styles.addToCartButton,
+              isAddingToCart && styles.addToCartButtonDisabled
+            ]}
+            onPress={handleAddToCart}
+            disabled={isAddingToCart}
           >
-            <MaterialIcons name="add-shopping-cart" size={20} color="#FFF" />
-            <Text style={styles.addToCartText}>Ajouter au panier</Text>
+            {isAddingToCart ? (
+              <MaterialIcons name="hourglass-empty" size={20} color="#FFF" />
+            ) : (
+              <MaterialIcons name="add-shopping-cart" size={20} color="#FFF" />
+            )}
+            <Text style={styles.addToCartText}>
+              {isAddingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -216,6 +323,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#856404',
   },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginRight: 8,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#666',
+  },
   price: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -248,7 +368,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 8,
   },
-  allergensContainer: {
+  quantityContainer: {
     marginBottom: 16,
   },
   sectionTitle: {
@@ -256,6 +376,59 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 8,
+  },
+  quantitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: 8,
+  },
+  quantityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E31837',
+  },
+  quantityButtonDisabled: {
+    borderColor: '#CCC',
+    backgroundColor: '#f0f0f0',
+  },
+  quantityText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginHorizontal: 20,
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  instructionsContainer: {
+    marginBottom: 16,
+  },
+  instructionsInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  instructionsCounter: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  allergensContainer: {
+    marginBottom: 16,
   },
   allergensList: {
     flexDirection: 'row',
@@ -298,6 +471,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  totalPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#E31837',
+  },
   addToCartButton: {
     backgroundColor: '#E31837',
     flexDirection: 'row',
@@ -305,6 +497,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
+  },
+  addToCartButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   addToCartText: {
     color: '#FFF',

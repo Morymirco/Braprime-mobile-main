@@ -21,6 +21,8 @@ const MENU_ITEMS = [
     id: 'favorites',
     title: 'Mes Favoris',
     icon: (props: IconProps) => <MaterialIcons name="favorite-outline" {...props} />,
+    showArrow: true,
+    onPress: (router: Router) => router.push('/favorites'),
   },
   {
     id: 'language',
@@ -33,13 +35,7 @@ const MENU_ITEMS = [
     title: 'Discuter avec nous',
     icon: (props: IconProps) => <Ionicons name="chatbubble-outline" {...props} />,
     showArrow: true,
-  },
-  {
-    id: 'payment',
-    title: 'Méthodes de paiement',
-    icon: (props: IconProps) => <MaterialIcons name="credit-card" {...props} />,
-    showArrow: true,
-    onPress: (router: Router) => router.push('/payment/payment-methods'),
+    onPress: (router: Router) => router.push('/chat'),
   },
   {
     id: 'map',
