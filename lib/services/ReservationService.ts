@@ -98,7 +98,6 @@ export class ReservationService {
         user_id: session.user.id,
         business_id: data.business_id,
         business_name: data.business_name,
-        business_image: data.business_image,
         date: data.date,
         time: data.time,
         party_size: data.party_size,
