@@ -20,7 +20,8 @@ export interface SessionData {
 export class SessionService {
   private static SESSION_KEY = '@braprime_session';
   private static USER_PREFERENCES_KEY = '@braprime_user_preferences';
-  private static SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 heures
+  private static SESSION_TIMEOUT = 7 * 24 * 60 * 60 * 1000; // 7 jours au lieu de 24h
+  private static REFRESH_THRESHOLD = 15 * 60 * 1000; // Rafraîchir 15 minutes avant expiration
 
   /**
    * Sauvegarder la session utilisateur
@@ -82,8 +83,14 @@ export class SessionService {
    */
   static async refreshAccessToken(): Promise<boolean> {
     try {
+      console.log('🔄 Rafraîchissement du token d\'accès...');
+      
       const { data, error } = await supabase.auth.refreshSession();
-      if (error) return false;
+      
+      if (error) {
+        console.error('❌ Erreur lors du rafraîchissement:', error);
+        return false;
+      }
 
       if (data.session) {
         const sessionData = await this.getSession();
@@ -91,13 +98,20 @@ export class SessionService {
           sessionData.accessToken = data.session.access_token;
           sessionData.refreshToken = data.session.refresh_token;
           sessionData.expiresAt = Date.now() + (data.session.expires_in * 1000);
+          sessionData.lastActivity = Date.now();
           await this.saveSession(sessionData);
+          console.log('✅ Token rafraîchi et sauvegardé');
           return true;
+        } else {
+          console.log('❌ Aucune session locale à mettre à jour');
+          return false;
         }
+      } else {
+        console.log('❌ Aucune session retournée par Supabase');
+        return false;
       }
-      return false;
     } catch (error) {
-      console.error('Erreur lors du rafraîchissement du token:', error);
+      console.error('❌ Erreur lors du rafraîchissement du token:', error);
       return false;
     }
   }
@@ -110,20 +124,33 @@ export class SessionService {
       const sessionData = await this.getSession();
       
       if (!sessionData) {
+        console.log('❌ Aucune session locale trouvée');
         return false;
       }
 
-      // Vérifier si le token va expirer bientôt (dans les 5 minutes)
-      const expiresIn = sessionData.expiresAt - Date.now();
-      const fiveMinutes = 5 * 60 * 1000;
+      // Vérifier si la session a expiré
+      if (this.isSessionExpired(sessionData)) {
+        console.log('❌ Session expirée, suppression...');
+        await this.clearSession();
+        return false;
+      }
 
-      if (expiresIn < fiveMinutes) {
-        console.log('🔄 Token va expirer bientôt, rafraîchissement...');
-        return await this.refreshAccessToken();
+      // Vérifier si le token va expirer bientôt
+      const expiresIn = sessionData.expiresAt - Date.now();
+      
+      if (expiresIn < this.REFRESH_THRESHOLD) {
+        console.log('🔄 Token va expirer bientôt, rafraîchissement automatique...');
+        const refreshed = await this.refreshAccessToken();
+        if (!refreshed) {
+          console.log('❌ Échec du rafraîchissement du token');
+          return false;
+        }
+        console.log('✅ Token rafraîchi avec succès');
       }
 
       // Mettre à jour l'activité
       await this.updateSessionActivity();
+      console.log('✅ Session valide');
       return true;
     } catch (error) {
       console.error('❌ Erreur lors de la validation de la session:', error);

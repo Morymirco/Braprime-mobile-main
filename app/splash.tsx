@@ -1,12 +1,38 @@
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SessionService } from '../lib/services/SessionService';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
+  useEffect(() => {
+    // Vérifier l'authentification au chargement
+    checkAuthentication();
+  }, []);
+
+  const checkAuthentication = async () => {
+    try {
+      console.log('🔄 Vérification de l\'authentification dans le splash...');
+      
+      const session = await SessionService.getSession();
+      
+      if (session && session.user) {
+        console.log('✅ Session trouvée, redirection vers l\'app principale');
+        router.replace('/(tabs)');
+        return;
+      }
+      
+      console.log('❌ Aucune session, rester sur le splash pour la sélection de langue');
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification:', error);
+    }
+  };
+
   const handleLanguageSelect = (language: string) => {
     // TODO: Set language in storage
+    console.log('🌍 Langue sélectionnée:', language);
     router.replace('/select-location');
   };
 

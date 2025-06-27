@@ -35,37 +35,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isAuthenticated) {
       const interval = setInterval(async () => {
         await validateSession();
-      }, 5 * 60 * 1000); // Vérifier toutes les 5 minutes
+      }, 10 * 60 * 1000); // Vérifier toutes les 10 minutes au lieu de 5
 
       return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  // Mettre à jour l'activité de la session quand l'utilisateur interagit
+  useEffect(() => {
+    if (isAuthenticated) {
+      const updateActivity = () => {
+        SessionService.updateSessionActivity();
+      };
+
+      // En React Native, on utilise AppState au lieu des événements DOM
+      // Cette logique est maintenant gérée dans useSessionPersistence
     }
   }, [isAuthenticated]);
 
   const initializeSession = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Initialisation de la session...');
       
       // Essayer de récupérer la session locale
       const localSession = await SessionService.getSession();
       
       if (localSession) {
+        console.log('📱 Session locale trouvée, validation...');
+        
         // Valider la session avec Supabase
-        const isValid = await SessionService.refreshAccessToken();
+        const isValid = await SessionService.validateSession();
         
         if (isValid) {
+          console.log('✅ Session locale valide');
           setUser(localSession.user);
           setIsAuthenticated(true);
           setSessionValid(true);
+          
+          // Mettre à jour l'activité
+          await SessionService.updateSessionActivity();
+          return;
         } else {
-          // Session invalide, essayer de récupérer depuis Supabase
-          await syncWithSupabase();
+          console.log('⚠️ Session locale invalide, synchronisation avec Supabase...');
         }
       } else {
-        // Aucune session locale, essayer de récupérer depuis Supabase
-        await syncWithSupabase();
+        console.log('📱 Aucune session locale, synchronisation avec Supabase...');
       }
+      
+      // Synchroniser avec Supabase
+      await syncWithSupabase();
     } catch (err) {
-      console.error('Erreur lors de l\'initialisation de la session:', err);
+      console.error('❌ Erreur lors de l\'initialisation de la session:', err);
+      setUser(null);
+      setIsAuthenticated(false);
+      setSessionValid(false);
     } finally {
       setLoading(false);
     }
@@ -73,35 +97,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const syncWithSupabase = async () => {
     try {
-      const { user: currentUser, error } = await AuthService.getCurrentUser();
+      console.log('🔄 Synchronisation avec Supabase...');
       
-      if (error || !currentUser) {
+      // Essayer de récupérer la session Supabase
+      const { data: { session }, error: sessionError } = await AuthService.getSupabaseSession();
+      
+      if (sessionError || !session) {
+        console.log('❌ Aucune session Supabase active');
         setUser(null);
         setIsAuthenticated(false);
         setSessionValid(false);
         return;
       }
 
-      // Récupérer la session Supabase
-      const { data: { session } } = await AuthService.getSupabaseSession();
+      console.log('✅ Session Supabase trouvée, récupération du profil...');
       
-      if (session) {
-        // Créer et sauvegarder la session locale
-        const userSession: UserSession = {
-          user: currentUser,
-          accessToken: session.access_token,
-          refreshToken: session.refresh_token,
-          expiresAt: Date.now() + (session.expires_in * 1000),
-          lastActivity: Date.now(),
-        };
-        
-        await SessionService.saveSession(userSession);
-        setUser(currentUser);
-        setIsAuthenticated(true);
-        setSessionValid(true);
+      // Récupérer le profil utilisateur
+      const { user: currentUser, error } = await AuthService.getCurrentUser();
+      
+      if (error || !currentUser) {
+        console.log('❌ Erreur lors de la récupération du profil:', error);
+        setUser(null);
+        setIsAuthenticated(false);
+        setSessionValid(false);
+        return;
       }
+
+      console.log('✅ Profil utilisateur récupéré, sauvegarde de la session...');
+      
+      // Créer et sauvegarder la session locale
+      const userSession: UserSession = {
+        user: currentUser,
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token,
+        expiresAt: Date.now() + (session.expires_in * 1000),
+        lastActivity: Date.now(),
+      };
+      
+      await SessionService.saveSession(userSession);
+      setUser(currentUser);
+      setIsAuthenticated(true);
+      setSessionValid(true);
+      
+      console.log('✅ Session synchronisée avec succès');
     } catch (err) {
-      console.error('Erreur lors de la synchronisation avec Supabase:', err);
+      console.error('❌ Erreur lors de la synchronisation avec Supabase:', err);
       setUser(null);
       setIsAuthenticated(false);
       setSessionValid(false);
@@ -110,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const validateSession = async () => {
     try {
-      const isValid = await SessionService.refreshAccessToken();
+      const isValid = await SessionService.validateSession();
       setSessionValid(isValid);
       
       if (!isValid) {
@@ -118,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await syncWithSupabase();
       }
     } catch (err) {
-      console.error('Erreur lors de la validation de la session:', err);
+      console.error('❌ Erreur lors de la validation de la session:', err);
       setSessionValid(false);
     }
   };

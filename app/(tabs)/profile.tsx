@@ -1,5 +1,6 @@
 import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Router, useRouter } from 'expo-router';
+import React from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProfile } from '../../hooks/useProfile';
@@ -16,6 +17,12 @@ const MENU_ITEMS = [
     title: 'Mes Commandes',
     icon: (props: IconProps) => <MaterialIcons name="receipt-long" {...props} />,
     onPress: (router: Router) => router.push('/orders'),
+  },
+  {
+    id: 'reservations',
+    title: 'Mes Réservations',
+    icon: (props: IconProps) => <MaterialIcons name="event-available" {...props} />,
+    onPress: (router: Router) => router.push('/reservations'),
   },
   {
     id: 'favorites',
@@ -167,26 +174,28 @@ export default function ProfileScreen() {
         </View>
 
         {/* Existing Menu Items */}
-        {MENU_ITEMS.map((item, index) => (
-          <TouchableOpacity 
-            key={item.id}
-            style={[
-              styles.menuItem,
-              index !== MENU_ITEMS.length - 1 && styles.menuItemBorder
-            ]}
-            onPress={() => handleMenuItemPress(item)}
-          >
-            <View style={styles.menuItemLeft}>
-              {item.icon({ size: 24, color: 'black' })}
-              <Text style={styles.menuItemText}>{item.title}</Text>
-            </View>
-            <Feather 
-              name={item.arrowIcon || 'chevron-right'} 
-              size={20} 
-              color="#666" 
-            />
-          </TouchableOpacity>
-        ))}
+        <View style={styles.menuContainer}>
+          {MENU_ITEMS.map((item, index) => (
+            <TouchableOpacity 
+              key={item.id}
+              style={[
+                styles.menuItem,
+                index !== MENU_ITEMS.length - 1 && styles.menuItemBorder
+              ]}
+              onPress={() => handleMenuItemPress(item)}
+            >
+              <View style={styles.menuItemLeft}>
+                {item.icon({ size: 24, color: 'black' })}
+                <Text style={styles.menuItemText}>{item.title}</Text>
+              </View>
+              <Feather 
+                name={item.arrowIcon || 'chevron-right'} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Se déconnecter</Text>
@@ -220,9 +229,6 @@ const styles = StyleSheet.create({
   settingsButton: {
     padding: 8,
   },
-  content: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -254,6 +260,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  content: {
+    flex: 1,
   },
   profileSection: {
     paddingTop: 20,
@@ -294,11 +303,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
     marginHorizontal: 16,
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
   },
   walletLabel: {
     fontSize: 14,
@@ -310,21 +319,26 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   walletValue: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginRight: 4,
+    color: '#000',
   },
   walletCurrency: {
-    fontSize: 20,
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#666',
+    marginLeft: 4,
+  },
+  menuContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
   },
   menuItemBorder: {
     borderBottomWidth: 1,
@@ -337,29 +351,33 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     marginLeft: 12,
+    color: '#000',
   },
   logoutButton: {
+    backgroundColor: '#E31837',
+    marginHorizontal: 16,
+    marginTop: 24,
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginTop: 20,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   logoutText: {
+    color: '#fff',
     fontSize: 16,
-    color: '#E31837',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
-    marginTop: 'auto',
-    paddingVertical: 20,
+    marginTop: 32,
+    marginBottom: 16,
   },
   version: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: '#999',
   },
   copyright: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: '#999',
     marginTop: 4,
   },
 }); 

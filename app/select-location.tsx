@@ -1,8 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import WebView from 'react-native-webview';
+import { SessionService } from '../lib/services/SessionService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -10,8 +11,32 @@ export default function SelectLocationScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    // Vérifier l'authentification au chargement
+    checkAuthentication();
+  }, []);
+
+  const checkAuthentication = async () => {
+    try {
+      console.log('🔄 Vérification de l\'authentification dans select-location...');
+      
+      const session = await SessionService.getSession();
+      
+      if (session && session.user) {
+        console.log('✅ Session trouvée, redirection vers l\'app principale');
+        router.replace('/(tabs)');
+        return;
+      }
+      
+      console.log('❌ Aucune session, rester sur select-location');
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification:', error);
+    }
+  };
+
   const handleConfirmLocation = () => {
     // TODO: Save selected location
+    console.log('📍 Localisation confirmée, redirection vers login');
     router.replace('/login');
   };
 

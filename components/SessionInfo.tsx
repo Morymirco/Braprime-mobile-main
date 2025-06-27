@@ -1,29 +1,26 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import {
-    Alert,
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../lib/contexts/AuthContext';
 import { SessionService } from '../lib/services/SessionService';
 
-interface SessionInfoProps {
-  showDetails?: boolean;
-  onRefresh?: () => void;
+interface SessionStats {
+  isAuthenticated: boolean;
+  sessionAge: number | null;
+  lastActivity: number | null;
+  expiresIn: number | null;
 }
 
-export default function SessionInfo({ showDetails = false, onRefresh }: SessionInfoProps) {
+export default function SessionInfo() {
   const { user, isAuthenticated, sessionValid, refreshSession } = useAuth();
-  const [sessionStats, setSessionStats] = useState<any>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
       loadSessionStats();
+      const interval = setInterval(loadSessionStats, 30000); // Mettre à jour toutes les 30 secondes
+      return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
 
@@ -40,144 +37,90 @@ export default function SessionInfo({ showDetails = false, onRefresh }: SessionI
     try {
       await refreshSession();
       await loadSessionStats();
-      onRefresh?.();
+      Alert.alert('Succès', 'Session rafraîchie avec succès');
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de rafraîchir la session');
+      Alert.alert('Erreur', 'Erreur lors du rafraîchissement de la session');
     }
   };
 
   const formatDuration = (milliseconds: number | null): string => {
     if (!milliseconds) return 'N/A';
     
-    const minutes = Math.floor(milliseconds / (1000 * 60));
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
     if (days > 0) return `${days}j ${hours % 24}h`;
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    return `${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
   };
 
-  const formatTime = (timestamp: number | null): string => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.statusContainer}>
-          <MaterialIcons name="person-off" size={20} color="#E31837" />
-          <Text style={styles.statusText}>Non connecté</Text>
-        </View>
-      </View>
-    );
+  if (!isAuthenticated || !user) {
+    return null;
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <TouchableOpacity 
+        style={styles.header}
+        onPress={() => setShowDetails(!showDetails)}
+      >
         <View style={styles.statusContainer}>
           <MaterialIcons 
             name={sessionValid ? "check-circle" : "warning"} 
             size={20} 
-            color={sessionValid ? "#00C853" : "#FF9800"} 
+            color={sessionValid ? "#10b981" : "#f59e0b"} 
           />
-          <Text style={[styles.statusText, { color: sessionValid ? "#00C853" : "#FF9800" }]}>
-            {sessionValid ? 'Session valide' : 'Session à rafraîchir'}
+          <Text style={styles.statusText}>
+            Session {sessionValid ? 'Active' : 'Problème'}
           </Text>
         </View>
-        
-        <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshSession}>
-          <MaterialIcons name="refresh" size={16} color="#E31837" />
-        </TouchableOpacity>
-      </View>
-
-      {user && (
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          <Text style={styles.userRole}>
-            {user.role === 'customer' ? 'Client' : 'Partenaire'}
-          </Text>
-        </View>
-      )}
+        <MaterialIcons 
+          name={showDetails ? "expand-less" : "expand-more"} 
+          size={20} 
+          color="#666" 
+        />
+      </TouchableOpacity>
 
       {showDetails && sessionStats && (
         <View style={styles.detailsContainer}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Utilisateur:</Text>
+            <Text style={styles.detailValue}>{user.name || user.email}</Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Dernière activité:</Text>
+            <Text style={styles.detailValue}>
+              {sessionStats.lastActivity ? formatDuration(Date.now() - sessionStats.lastActivity) : 'N/A'}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Expire dans:</Text>
+            <Text style={styles.detailValue}>
+              {sessionStats.expiresIn ? formatDuration(sessionStats.expiresIn) : 'N/A'}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Âge de session:</Text>
+            <Text style={styles.detailValue}>
+              {sessionStats.sessionAge ? formatDuration(sessionStats.sessionAge) : 'N/A'}
+            </Text>
+          </View>
+
           <TouchableOpacity 
-            style={styles.detailsButton}
-            onPress={() => setShowModal(true)}
+            style={styles.refreshButton}
+            onPress={handleRefreshSession}
           >
-            <Text style={styles.detailsButtonText}>Détails de session</Text>
-            <MaterialIcons name="info" size={16} color="#666" />
+            <MaterialIcons name="refresh" size={16} color="#E31837" />
+            <Text style={styles.refreshButtonText}>Rafraîchir la session</Text>
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Modal avec détails complets */}
-      <Modal
-        visible={showModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Informations de session</Text>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <MaterialIcons name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-
-            {sessionStats && (
-              <View style={styles.statsContainer}>
-                <View style={styles.statRow}>
-                  <Text style={styles.statLabel}>Statut:</Text>
-                  <Text style={[styles.statValue, { color: sessionStats.isAuthenticated ? "#00C853" : "#E31837" }]}>
-                    {sessionStats.isAuthenticated ? 'Connecté' : 'Déconnecté'}
-                  </Text>
-                </View>
-
-                <View style={styles.statRow}>
-                  <Text style={styles.statLabel}>Âge de session:</Text>
-                  <Text style={styles.statValue}>
-                    {formatDuration(sessionStats.sessionAge)}
-                  </Text>
-                </View>
-
-                <View style={styles.statRow}>
-                  <Text style={styles.statLabel}>Dernière activité:</Text>
-                  <Text style={styles.statValue}>
-                    {formatTime(sessionStats.lastActivity)}
-                  </Text>
-                </View>
-
-                <View style={styles.statRow}>
-                  <Text style={styles.statLabel}>Expire dans:</Text>
-                  <Text style={[styles.statValue, { color: sessionStats.expiresIn < 300000 ? "#E31837" : "#666" }]}>
-                    {formatDuration(sessionStats.expiresIn)}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={handleRefreshSession}
-              >
-                <MaterialIcons name="refresh" size={16} color="#fff" />
-                <Text style={styles.actionButtonText}>Rafraîchir</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -186,130 +129,67 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
     borderRadius: 8,
+    margin: 16,
     padding: 12,
-    margin: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowRadius: 2,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   statusText: {
-    marginLeft: 8,
     fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    color: '#333',
+  },
+  detailsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 12,
+    color: '#333',
     fontWeight: '600',
   },
   refreshButton: {
-    padding: 4,
-  },
-  userInfo: {
-    marginBottom: 8,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  userRole: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  detailsContainer: {
-    marginTop: 8,
-  },
-  detailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#f5f5f5',
     borderRadius: 6,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
-  detailsButtonText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    margin: 20,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  statsContainer: {
-    marginBottom: 20,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E31837',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    gap: 8,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  refreshButtonText: {
+    fontSize: 12,
+    color: '#E31837',
+    fontWeight: '500',
+    marginLeft: 4,
   },
 }); 
