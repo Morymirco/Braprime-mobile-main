@@ -46,7 +46,7 @@ export class ReservationService {
         .from('reservations')
         .select(`
           *,
-          business:businesses(id, name, image)
+          business:businesses(id, name, cover_image, logo)
         `)
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false });
@@ -61,7 +61,7 @@ export class ReservationService {
         user_id: item.user_id,
         business_id: item.business_id,
         business_name: item.business?.name || item.business_name,
-        business_image: item.business?.image || item.business_image,
+        business_image: item.business?.cover_image || item.business?.logo || item.business_image,
         date: item.date,
         time: item.time,
         party_size: item.party_size,
