@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -29,13 +29,8 @@ export default function BusinessDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   
-  // Debug logging
-  console.log('🔍 Business Detail - All params:', params);
-  console.log('🔍 Business Detail - ID param:', params.id, 'Type:', typeof params.id);
-  
   // Try different ways to get the ID
   const businessId = params.id || (params as any).id || '';
-  console.log('🔍 Business Detail - Final businessId:', businessId, 'Type:', typeof businessId);
   
   const { business, loading, error, refetch } = useBusiness(businessId);
   const { categories, loading: categoriesLoading } = useMenuCategories(businessId);
@@ -50,67 +45,72 @@ export default function BusinessDetailScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteMenuItems, setFavoriteMenuItems] = useState<Set<number>>(new Set());
+  const [favoritesChecked, setFavoritesChecked] = useState(false);
 
-  // Vérifier l'état des favoris au chargement
+  // Vérifier l'état des favoris au chargement (une seule fois)
   useEffect(() => {
     const checkFavorites = async () => {
-      if (business) {
-        // Vérifier si le commerce est en favori
-        const businessFavorite = await isBusinessFavorite(business.id.toString());
-        setIsFavorite(businessFavorite);
-        
-        // Vérifier les articles favoris
-        const favoriteItems = new Set<number>();
-        for (const item of menuItems) {
-          const isFavorite = await isMenuItemFavorite(item.id.toString());
-          if (isFavorite) {
-            favoriteItems.add(item.id);
+      if (business && menuItems.length > 0 && !favoritesChecked) {
+        try {
+          // Vérifier si le commerce est en favori
+          const businessFavorite = await isBusinessFavorite(business.id.toString());
+          setIsFavorite(businessFavorite);
+          
+          // Vérifier les articles favoris
+          const favoriteItems = new Set<number>();
+          for (const item of menuItems) {
+            const isFavorite = await isMenuItemFavorite(item.id.toString());
+            if (isFavorite) {
+              favoriteItems.add(item.id);
+            }
           }
+          setFavoriteMenuItems(favoriteItems);
+          setFavoritesChecked(true);
+        } catch (error) {
+          console.error('Erreur lors de la vérification des favoris:', error);
         }
-        setFavoriteMenuItems(favoriteItems);
       }
     };
 
-    if (business && menuItems.length > 0) {
-      checkFavorites();
-    }
-  }, [business, menuItems, isBusinessFavorite, isMenuItemFavorite]);
+    checkFavorites();
+  }, [business, menuItems, favoritesChecked, isBusinessFavorite, isMenuItemFavorite]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await refetch();
+      setFavoritesChecked(false); // Réinitialiser pour re-vérifier les favoris
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [refetch]);
 
-  const handleBackPress = () => {
+  const handleBackPress = useCallback(() => {
     router.back();
-  };
+  }, [router]);
 
-  const handleCallPress = () => {
+  const handleCallPress = useCallback(() => {
     if (business?.phone) {
       Linking.openURL(`tel:${business.phone}`);
     }
-  };
+  }, [business?.phone]);
 
-  const handleEmailPress = () => {
+  const handleEmailPress = useCallback(() => {
     if (business?.email) {
       Linking.openURL(`mailto:${business.email}`);
     }
-  };
+  }, [business?.email]);
 
-  const handleCategoryPress = (categoryId: number) => {
+  const handleCategoryPress = useCallback((categoryId: number) => {
     setSelectedCategory(selectedCategory === categoryId ? null : categoryId);
-  };
+  }, [selectedCategory]);
 
-  const handleMenuItemPress = (item: MenuItemWithCategory) => {
+  const handleMenuItemPress = useCallback((item: MenuItemWithCategory) => {
     setSelectedMenuItem(item);
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleAddToCart = async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
+  const handleAddToCart = useCallback(async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
     if (!business) {
       showToast('error', 'Erreur: Commerce non trouvé');
       return;
@@ -141,9 +141,9 @@ export default function BusinessDetailScreen() {
       showToast('error', 'Erreur lors de l\'ajout au panier');
       console.error('Erreur lors de l\'ajout au panier:', error);
     }
-  };
+  }, [business, addToCart, showToast]);
 
-  const handleQuickAddToCart = async (item: MenuItemWithCategory) => {
+  const handleQuickAddToCart = useCallback(async (item: MenuItemWithCategory) => {
     if (!business) {
       showToast('error', 'Erreur: Commerce non trouvé');
       return;
@@ -175,9 +175,9 @@ export default function BusinessDetailScreen() {
     } finally {
       setAddingToCart(null);
     }
-  };
+  }, [business, addToCart, showToast]);
 
-  const handleToggleFavorite = async () => {
+  const handleToggleFavorite = useCallback(async () => {
     if (!business) return;
 
     try {
@@ -197,9 +197,9 @@ export default function BusinessDetailScreen() {
     } catch (error) {
       showToast('error', 'Erreur lors de la gestion des favoris');
     }
-  };
+  }, [business, isFavorite, addFavoriteBusiness, removeFavoriteBusiness, showToast]);
 
-  const handleToggleMenuItemFavorite = async (item: MenuItemWithCategory) => {
+  const handleToggleMenuItemFavorite = useCallback(async (item: MenuItemWithCategory) => {
     try {
       const isItemFavorite = favoriteMenuItems.has(item.id);
       
@@ -223,12 +223,12 @@ export default function BusinessDetailScreen() {
     } catch (error) {
       showToast('error', 'Erreur lors de la gestion des favoris');
     }
-  };
+  }, [favoriteMenuItems, addFavoriteMenuItem, removeFavoriteMenuItem, showToast]);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setModalVisible(false);
     setSelectedMenuItem(null);
-  };
+  }, []);
 
   const renderStars = (rating: number) => {
     const stars = [];

@@ -9,6 +9,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -20,6 +21,14 @@ import { useCart } from '../../hooks/useCart';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../lib/contexts/AuthContext';
 import { MenuItemWithCategory } from '../../lib/services/MenuService';
+
+// Types
+interface Promo {
+  code: string;
+  discount: number;
+  type: 'percentage' | 'fixed';
+  minAmount?: number;
+}
 
 // Composant personnalisé pour les détails d'article du panier
 interface CartItemDetailProps {
@@ -207,6 +216,9 @@ export default function CartScreen() {
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const router = useRouter();
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<Promo | null>(null);
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -315,6 +327,73 @@ export default function CartScreen() {
     // Cette fonction ne sera pas utilisée dans le contexte du panier
     // car on ne peut pas ajouter depuis le modal dans le panier
     showToast('info', 'Utilisez les boutons +/- pour modifier la quantité');
+  };
+
+  // Fonction pour appliquer un code promo (simulation)
+  const applyPromo = async (code: string): Promise<Promo | null> => {
+    // Simulation d'une API de codes promo
+    const promoCodes: Record<string, Promo> = {
+      'WELCOME10': { code: 'WELCOME10', discount: 10000, type: 'fixed', minAmount: 50000 },
+      'SAVE20': { code: 'SAVE20', discount: 20, type: 'percentage', minAmount: 25000 },
+      'FREESHIP': { code: 'FREESHIP', discount: 5000, type: 'fixed', minAmount: 100000 },
+      'NEWUSER': { code: 'NEWUSER', discount: 15000, type: 'fixed', minAmount: 30000 },
+    };
+
+    // Simuler un délai réseau
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const promo = promoCodes[code.toUpperCase()];
+    if (!promo) {
+      return null;
+    }
+
+    // Vérifier le montant minimum
+    const total = getTotal();
+    if (promo.minAmount && total < promo.minAmount) {
+      throw new Error(`Montant minimum requis: ${promo.minAmount.toLocaleString()} GNF`);
+    }
+
+    // Calculer la réduction
+    let discount = promo.discount;
+    if (promo.type === 'percentage') {
+      discount = Math.round(total * (promo.discount / 100));
+    }
+
+    return {
+      ...promo,
+      discount
+    };
+  };
+
+  const handleApplyPromo = async () => {
+    setIsApplyingPromo(true);
+    try {
+      const promo = await applyPromo(promoCode);
+      if (promo) {
+        setAppliedPromo(promo);
+        setPromoCode('');
+        showToast('success', `Code promo appliqué ! Réduction de ${promo.discount.toLocaleString()} GNF`);
+      } else {
+        showToast('error', 'Code promo invalide');
+      }
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Erreur lors de l\'application du code promo');
+    } finally {
+      setIsApplyingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    showToast('success', 'Code promo supprimé');
+  };
+
+  const getFinalTotal = () => {
+    let total = getTotal() + (cart?.delivery_fee || 0);
+    if (appliedPromo) {
+      total -= appliedPromo.discount;
+    }
+    return Math.max(0, total); // Éviter un total négatif
   };
 
   if (!user) {
@@ -523,6 +602,59 @@ export default function CartScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Section Code Promo */}
+        <View style={styles.promoContainer}>
+          <View style={styles.promoHeader}>
+            <MaterialIcons name="local-offer" size={20} color="#E31837" />
+            <Text style={styles.promoTitle}>Code promo</Text>
+          </View>
+          
+          <View style={styles.promoInputContainer}>
+            <TextInput
+              style={styles.promoInput}
+              placeholder="Entrez votre code promo"
+              placeholderTextColor="#999"
+              value={promoCode}
+              onChangeText={setPromoCode}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity
+              style={[
+                styles.applyPromoButton,
+                !promoCode.trim() && styles.applyPromoButtonDisabled
+              ]}
+              onPress={handleApplyPromo}
+              disabled={!promoCode.trim() || isApplyingPromo}
+            >
+              {isApplyingPromo ? (
+                <MaterialIcons name="hourglass-empty" size={16} color="#FFF" />
+              ) : (
+                <Text style={styles.applyPromoText}>Appliquer</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          {appliedPromo && (
+            <View style={styles.appliedPromoContainer}>
+              <View style={styles.appliedPromoInfo}>
+                <MaterialIcons name="check-circle" size={16} color="#00C853" />
+                <Text style={styles.appliedPromoText}>
+                  Code {appliedPromo.code} appliqué
+                </Text>
+                <Text style={styles.appliedPromoDiscount}>
+                  -{appliedPromo.discount} GNF
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.removePromoButton}
+                onPress={handleRemovePromo}
+              >
+                <MaterialIcons name="close" size={16} color="#666" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         {/* Résumé */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryRow}>
@@ -537,10 +669,19 @@ export default function CartScreen() {
             </View>
           )}
           
+          {appliedPromo && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Réduction promo</Text>
+              <Text style={[styles.summaryValue, styles.promoDiscountValue]}>
+                -{appliedPromo.discount.toLocaleString()} GNF
+              </Text>
+            </View>
+          )}
+          
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>
-              {((getTotal() + (cart?.delivery_fee || 0))).toLocaleString()} GNF
+              {getFinalTotal().toLocaleString()} GNF
             </Text>
           </View>
         </View>
@@ -1005,5 +1146,76 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 16,
     fontWeight: '600',
+  },
+  promoContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  promoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  promoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginLeft: 8,
+  },
+  promoInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  promoInput: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+  },
+  applyPromoButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#E31837',
+  },
+  applyPromoButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+  },
+  applyPromoText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appliedPromoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  appliedPromoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  appliedPromoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginLeft: 8,
+  },
+  appliedPromoDiscount: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  removePromoButton: {
+    padding: 4,
+  },
+  promoDiscountValue: {
+    fontWeight: 'bold',
+    color: '#E31837',
   },
 }); 

@@ -35,16 +35,18 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
   // Vérifier l'état des favoris au chargement
   useEffect(() => {
     const checkFavorite = async () => {
-      if (item) {
-        const favorite = await isMenuItemFavorite(item.id.toString());
-        setIsFavorite(favorite);
+      if (item && visible && !isFavorite) {
+        try {
+          const favorite = await isMenuItemFavorite(item.id.toString());
+          setIsFavorite(favorite);
+        } catch (error) {
+          console.error('Erreur lors de la vérification des favoris:', error);
+        }
       }
     };
 
-    if (item && visible) {
-      checkFavorite();
-    }
-  }, [item, visible, isMenuItemFavorite]);
+    checkFavorite();
+  }, [item, visible, isFavorite, isMenuItemFavorite]);
 
   if (!item) return null;
 

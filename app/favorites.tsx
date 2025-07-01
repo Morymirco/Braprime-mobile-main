@@ -12,6 +12,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import FavoritesSkeleton from '../components/FavoritesSkeleton';
 import ToastContainer from '../components/ToastContainer';
 import { useFavorites } from '../hooks/useFavorites';
 import { useToast } from '../hooks/useToast';
@@ -254,9 +255,7 @@ export default function FavoritesScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement des favoris...</Text>
-        </View>
+        <FavoritesSkeleton businessCount={3} itemCount={6} />
       </SafeAreaView>
     );
   }

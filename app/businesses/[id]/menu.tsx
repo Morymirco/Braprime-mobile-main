@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Dimensions,
     FlatList,
@@ -39,6 +39,7 @@ export default function BusinessMenuScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
   const [favoriteItems, setFavoriteItems] = useState<Set<number>>(new Set());
+  const [favoritesChecked, setFavoritesChecked] = useState(false);
 
   // Sélectionner automatiquement la première catégorie si aucune n'est sélectionnée
   useEffect(() => {
@@ -47,44 +48,49 @@ export default function BusinessMenuScreen() {
     }
   }, [categories, selectedCategory]);
 
-  // Vérifier l'état des favoris au chargement
+  // Vérifier l'état des favoris au chargement (une seule fois)
   useEffect(() => {
     const checkFavorites = async () => {
-      const favoriteItemsSet = new Set<number>();
-      for (const item of menuItems) {
-        const isFavorite = await isMenuItemFavorite(item.id.toString());
-        if (isFavorite) {
-          favoriteItemsSet.add(item.id);
+      if (menuItems.length > 0 && !favoritesChecked) {
+        try {
+          const favoriteItemsSet = new Set<number>();
+          for (const item of menuItems) {
+            const isFavorite = await isMenuItemFavorite(item.id.toString());
+            if (isFavorite) {
+              favoriteItemsSet.add(item.id);
+            }
+          }
+          setFavoriteItems(favoriteItemsSet);
+          setFavoritesChecked(true);
+        } catch (error) {
+          console.error('Erreur lors de la vérification des favoris:', error);
         }
       }
-      setFavoriteItems(favoriteItemsSet);
     };
 
-    if (menuItems.length > 0) {
-      checkFavorites();
-    }
-  }, [menuItems, isMenuItemFavorite]);
+    checkFavorites();
+  }, [menuItems, favoritesChecked, isMenuItemFavorite]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       // Refresh all data
-      // Note: You would need to add refetch methods to the hooks
+      setFavoritesChecked(false); // Réinitialiser pour re-vérifier les favoris
     } finally {
       setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleBackPress = () => {
+  const handleBackPress = useCallback(() => {
     router.back();
-  };
+  }, [router]);
 
-  const handleMenuItemPress = (item: MenuItemWithCategory) => {
+  const handleMenuItemPress = useCallback((item: MenuItemWithCategory) => {
     setSelectedMenuItem(item);
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleAddToCart = async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
+  const handleAddToCart = useCallback(async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
     if (!business) {
       showToast('error', 'Erreur: Commerce non trouvé');
       return;
@@ -115,9 +121,9 @@ export default function BusinessMenuScreen() {
       showToast('error', 'Erreur lors de l\'ajout au panier');
       console.error('Erreur lors de l\'ajout au panier:', error);
     }
-  };
+  }, [business, addToCart, showToast]);
 
-  const handleQuickAddToCart = async (item: MenuItemWithCategory) => {
+  const handleQuickAddToCart = useCallback(async (item: MenuItemWithCategory) => {
     if (!business) {
       showToast('error', 'Erreur: Commerce non trouvé');
       return;
@@ -149,9 +155,9 @@ export default function BusinessMenuScreen() {
     } finally {
       setAddingToCart(null);
     }
-  };
+  }, [business, addToCart, showToast]);
 
-  const handleToggleFavorite = async (item: MenuItemWithCategory) => {
+  const handleToggleFavorite = useCallback(async (item: MenuItemWithCategory) => {
     try {
       const isFavorite = favoriteItems.has(item.id);
       
@@ -175,12 +181,12 @@ export default function BusinessMenuScreen() {
     } catch (error) {
       showToast('error', 'Erreur lors de la gestion des favoris');
     }
-  };
+  }, [favoriteItems, addFavoriteMenuItem, removeFavoriteMenuItem, showToast]);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setModalVisible(false);
     setSelectedMenuItem(null);
-  };
+  }, []);
 
   const renderStars = (rating: number) => {
     const stars = [];

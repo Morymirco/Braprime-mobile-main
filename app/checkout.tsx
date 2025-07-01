@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     ScrollView,
     StyleSheet,
     Text,
@@ -17,6 +18,8 @@ import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
 
+const { width } = Dimensions.get('window');
+
 export default function CheckoutScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -24,14 +27,14 @@ export default function CheckoutScreen() {
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mobile_money'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money' | 'mtn_money'>('cash');
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     phone: '',
     address: '',
-    city: '',
-    notes: ''
+    neighborhood: '',
+    landmark: '',
+    instructions: ''
   });
 
   // Charger les données utilisateur et du panier
@@ -39,8 +42,7 @@ export default function CheckoutScreen() {
     if (user) {
       setFormData(prev => ({
         ...prev,
-        firstName: user.email?.split('@')[0] || '',
-        lastName: '',
+        fullName: user.email?.split('@')[0] || '',
         phone: '',
       }));
     }
@@ -49,7 +51,7 @@ export default function CheckoutScreen() {
       setFormData(prev => ({
         ...prev,
         address: cart.delivery_address || '',
-        notes: cart.delivery_instructions || '',
+        instructions: cart.delivery_instructions || '',
       }));
       setDeliveryMethod(cart.delivery_method || 'delivery');
     }
@@ -57,17 +59,17 @@ export default function CheckoutScreen() {
 
   // Calculer les totaux
   const cartTotal = cart?.total || 0;
-  const deliveryFee = deliveryMethod === 'delivery' ? 2000 : 0;
-  const tax = Math.round(cartTotal * 0.15);
+  const deliveryFee = deliveryMethod === 'delivery' ? 15000 : 0; // Augmenté pour correspondre au design web
+  const tax = Math.round(cartTotal * 0.18); // 18% comme dans le design web
   const grandTotal = cartTotal + deliveryFee + tax;
 
   // Validation du formulaire
   const isFormValid = () => {
     if (!cart || cart.items.length === 0) return false;
     
-    const requiredFields = [formData.firstName, formData.lastName, formData.phone];
+    const requiredFields = [formData.fullName, formData.phone];
     if (deliveryMethod === 'delivery') {
-      requiredFields.push(formData.address, formData.city);
+      requiredFields.push(formData.address, formData.neighborhood);
     }
     
     return requiredFields.every(field => field.trim() !== '');
@@ -81,18 +83,21 @@ export default function CheckoutScreen() {
     }
 
     try {
+      const fullAddress = deliveryMethod === 'delivery' 
+        ? `${formData.address}, ${formData.neighborhood}, Conakry`
+        : '';
+
       const orderData = {
         customer: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          fullName: formData.fullName,
           phone: formData.phone,
           email: user?.email,
         },
         delivery: {
           method: deliveryMethod,
-          address: formData.address,
-          city: formData.city,
-          instructions: formData.notes,
+          address: fullAddress,
+          landmark: formData.landmark,
+          instructions: formData.instructions,
         },
         payment: {
           method: paymentMethod,
@@ -181,31 +186,117 @@ export default function CheckoutScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Informations de livraison */}
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        {/* Mode de livraison */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="location-on" size={20} color="#E31837" />
-            <Text style={styles.sectionTitle}>Adresse de livraison</Text>
+            <MaterialIcons name="local-shipping" size={20} color="#E31837" />
+            <Text style={styles.sectionTitle}>Mode de livraison</Text>
+          </View>
+          <View style={styles.sectionContent}>
+            <View style={styles.deliveryOptionsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.deliveryOptionCard,
+                  deliveryMethod === 'delivery' && styles.deliveryOptionCardActive
+                ]}
+                onPress={() => setDeliveryMethod('delivery')}
+              >
+                <View style={styles.deliveryOptionHeader}>
+                  <View style={styles.deliveryOptionIcon}>
+                    <MaterialIcons 
+                      name="local-shipping" 
+                      size={24} 
+                      color={deliveryMethod === 'delivery' ? '#E31837' : '#666'} 
+                    />
+                  </View>
+                  <View style={styles.deliveryOptionRadio}>
+                    <View style={[
+                      styles.radioButton,
+                      deliveryMethod === 'delivery' && styles.radioButtonActive
+                    ]}>
+                      {deliveryMethod === 'delivery' && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.deliveryOptionContent}>
+                  <Text style={[
+                    styles.deliveryOptionTitle,
+                    deliveryMethod === 'delivery' && styles.deliveryOptionTitleActive
+                  ]}>
+                    Livraison
+                  </Text>
+                  <Text style={styles.deliveryOptionPrice}>
+                    {deliveryFee > 0 ? `${deliveryFee.toLocaleString()} GNF` : 'Frais inclus'}
+                  </Text>
+                  <Text style={styles.deliveryOptionDescription}>
+                    Livraison à domicile
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.deliveryOptionCard,
+                  deliveryMethod === 'pickup' && styles.deliveryOptionCardActive
+                ]}
+                onPress={() => setDeliveryMethod('pickup')}
+              >
+                <View style={styles.deliveryOptionHeader}>
+                  <View style={styles.deliveryOptionIcon}>
+                    <MaterialIcons 
+                      name="store" 
+                      size={24} 
+                      color={deliveryMethod === 'pickup' ? '#E31837' : '#666'} 
+                    />
+                  </View>
+                  <View style={styles.deliveryOptionRadio}>
+                    <View style={[
+                      styles.radioButton,
+                      deliveryMethod === 'pickup' && styles.radioButtonActive
+                    ]}>
+                      {deliveryMethod === 'pickup' && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.deliveryOptionContent}>
+                  <Text style={[
+                    styles.deliveryOptionTitle,
+                    deliveryMethod === 'pickup' && styles.deliveryOptionTitleActive
+                  ]}>
+                    À emporter
+                  </Text>
+                  <Text style={styles.deliveryOptionPrice}>
+                    Aucun frais supplémentaire
+                  </Text>
+                  <Text style={styles.deliveryOptionDescription}>
+                    Récupérez votre commande sur place
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Informations personnelles */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="person" size={20} color="#E31837" />
+            <Text style={styles.sectionTitle}>Informations personnelles</Text>
           </View>
           <View style={styles.sectionContent}>
             <View style={styles.inputRow}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Prénom *</Text>
+                <Text style={styles.inputLabel}>Nom complet *</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.firstName}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
-                  placeholder="Votre prénom"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Nom *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.lastName}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
-                  placeholder="Votre nom"
+                  value={formData.fullName}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
+                  placeholder="Votre nom complet"
                 />
               </View>
             </View>
@@ -216,225 +307,236 @@ export default function CheckoutScreen() {
                 style={styles.input}
                 value={formData.phone}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-                placeholder="Votre numéro de téléphone"
+                placeholder="+224 XXX XX XX XX"
                 keyboardType="phone-pad"
               />
             </View>
+          </View>
+        </View>
 
-            {deliveryMethod === 'delivery' && (
-              <>
+        {/* Adresse de livraison - Seulement si livraison */}
+        {deliveryMethod === 'delivery' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="location-on" size={20} color="#E31837" />
+              <Text style={styles.sectionTitle}>Adresse de livraison</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Adresse *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.address}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+                  placeholder="Rue / Avenue / Boulevard"
+                />
+              </View>
+              
+              <View style={styles.inputRow}>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Adresse *</Text>
+                  <Text style={styles.inputLabel}>Quartier *</Text>
                   <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.address}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-                    placeholder="Votre adresse complète"
-                    multiline
-                    numberOfLines={3}
+                    style={styles.input}
+                    value={formData.neighborhood}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, neighborhood: text }))}
+                    placeholder="Votre quartier"
                   />
                 </View>
                 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Ville *</Text>
+                  <Text style={styles.inputLabel}>Point de repère</Text>
                   <TextInput
                     style={styles.input}
-                    value={formData.city}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, city: text }))}
-                    placeholder="Votre ville"
+                    value={formData.landmark}
+                    onChangeText={(text) => setFormData(prev => ({ ...prev, landmark: text }))}
+                    placeholder="Ex: Près de la station Total"
                   />
                 </View>
-              </>
-            )}
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Instructions spéciales</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.notes}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, notes: text }))}
-                placeholder="Instructions de livraison (optionnel)"
-                multiline
-                numberOfLines={3}
-              />
+              </View>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Instructions de livraison</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.instructions}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, instructions: text }))}
+                  placeholder="Instructions spéciales pour le livreur"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
-        {/* Méthode de livraison */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="local-shipping" size={20} color="#E31837" />
-            <Text style={styles.sectionTitle}>Méthode de livraison</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            <TouchableOpacity
-              style={[
-                styles.optionButton,
-                deliveryMethod === 'delivery' && styles.optionButtonActive
-              ]}
-              onPress={() => setDeliveryMethod('delivery')}
-            >
-              <MaterialIcons 
-                name="local-shipping" 
-                size={24} 
-                color={deliveryMethod === 'delivery' ? '#E31837' : '#666'} 
-              />
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionTitle,
-                  deliveryMethod === 'delivery' && styles.optionTitleActive
-                ]}>
-                  Livraison à domicile
-                </Text>
-                <Text style={styles.optionDescription}>
-                  Livraison à votre adresse (2 000 GNF)
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.optionButton,
-                deliveryMethod === 'pickup' && styles.optionButtonActive
-              ]}
-              onPress={() => setDeliveryMethod('pickup')}
-            >
-              <MaterialIcons 
-                name="store" 
-                size={24} 
-                color={deliveryMethod === 'pickup' ? '#E31837' : '#666'} 
-              />
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionTitle,
-                  deliveryMethod === 'pickup' && styles.optionTitleActive
-                ]}>
-                  Retrait en magasin
-                </Text>
-                <Text style={styles.optionDescription}>
-                  Retrait gratuit au commerce
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Méthode de paiement */}
+        {/* Mode de paiement */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="payment" size={20} color="#E31837" />
-            <Text style={styles.sectionTitle}>Méthode de paiement</Text>
+            <Text style={styles.sectionTitle}>Mode de paiement</Text>
           </View>
           <View style={styles.sectionContent}>
-            <TouchableOpacity
-              style={[
-                styles.optionButton,
-                paymentMethod === 'cash' && styles.optionButtonActive
-              ]}
-              onPress={() => setPaymentMethod('cash')}
-            >
-              <MaterialIcons 
-                name="attach-money" 
-                size={24} 
-                color={paymentMethod === 'cash' ? '#E31837' : '#666'} 
-              />
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionTitle,
-                  paymentMethod === 'cash' && styles.optionTitleActive
-                ]}>
-                  Espèces
-                </Text>
-                <Text style={styles.optionDescription}>
-                  Paiement en espèces à la livraison
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <View style={styles.paymentOptionsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  paymentMethod === 'cash' && styles.paymentOptionCardActive
+                ]}
+                onPress={() => setPaymentMethod('cash')}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIcon}>
+                    <Text style={styles.paymentEmoji}>💵</Text>
+                  </View>
+                  <View style={styles.paymentOptionRadio}>
+                    <View style={[
+                      styles.radioButton,
+                      paymentMethod === 'cash' && styles.radioButtonActive
+                    ]}>
+                      {paymentMethod === 'cash' && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.paymentOptionContent}>
+                  <Text style={[
+                    styles.paymentOptionTitle,
+                    paymentMethod === 'cash' && styles.paymentOptionTitleActive
+                  ]}>
+                    Paiement à la livraison
+                  </Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.optionButton,
-                paymentMethod === 'card' && styles.optionButtonActive
-              ]}
-              onPress={() => setPaymentMethod('card')}
-            >
-              <MaterialIcons 
-                name="credit-card" 
-                size={24} 
-                color={paymentMethod === 'card' ? '#E31837' : '#666'} 
-              />
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionTitle,
-                  paymentMethod === 'card' && styles.optionTitleActive
-                ]}>
-                  Carte bancaire
-                </Text>
-                <Text style={styles.optionDescription}>
-                  Paiement par carte bancaire
-                </Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  paymentMethod === 'orange_money' && styles.paymentOptionCardActive
+                ]}
+                onPress={() => setPaymentMethod('orange_money')}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIcon}>
+                    <Text style={styles.paymentEmoji}>🟠</Text>
+                  </View>
+                  <View style={styles.paymentOptionRadio}>
+                    <View style={[
+                      styles.radioButton,
+                      paymentMethod === 'orange_money' && styles.radioButtonActive
+                    ]}>
+                      {paymentMethod === 'orange_money' && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.paymentOptionContent}>
+                  <Text style={[
+                    styles.paymentOptionTitle,
+                    paymentMethod === 'orange_money' && styles.paymentOptionTitleActive
+                  ]}>
+                    Orange Money
+                  </Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.optionButton,
-                paymentMethod === 'mobile_money' && styles.optionButtonActive
-              ]}
-              onPress={() => setPaymentMethod('mobile_money')}
-            >
-              <MaterialIcons 
-                name="smartphone" 
-                size={24} 
-                color={paymentMethod === 'mobile_money' ? '#E31837' : '#666'} 
-              />
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionTitle,
-                  paymentMethod === 'mobile_money' && styles.optionTitleActive
-                ]}>
-                  Mobile Money
-                </Text>
-                <Text style={styles.optionDescription}>
-                  Paiement par Mobile Money
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Résumé de la commande */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="receipt" size={20} color="#E31837" />
-            <Text style={styles.sectionTitle}>Résumé de la commande</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Sous-total</Text>
-              <Text style={styles.summaryValue}>{cartTotal.toLocaleString()} GNF</Text>
-            </View>
-            
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Frais de livraison</Text>
-              <Text style={styles.summaryValue}>{deliveryFee.toLocaleString()} GNF</Text>
-            </View>
-            
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Taxes (15%)</Text>
-              <Text style={styles.summaryValue}>{tax.toLocaleString()} GNF</Text>
-            </View>
-            
-            <View style={[styles.summaryRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>{grandTotal.toLocaleString()} GNF</Text>
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  paymentMethod === 'mtn_money' && styles.paymentOptionCardActive
+                ]}
+                onPress={() => setPaymentMethod('mtn_money')}
+              >
+                <View style={styles.paymentOptionHeader}>
+                  <View style={styles.paymentOptionIcon}>
+                    <Text style={styles.paymentEmoji}>🟡</Text>
+                  </View>
+                  <View style={styles.paymentOptionRadio}>
+                    <View style={[
+                      styles.radioButton,
+                      paymentMethod === 'mtn_money' && styles.radioButtonActive
+                    ]}>
+                      {paymentMethod === 'mtn_money' && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.paymentOptionContent}>
+                  <Text style={[
+                    styles.paymentOptionTitle,
+                    paymentMethod === 'mtn_money' && styles.paymentOptionTitleActive
+                  ]}>
+                    MTN Money
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* Bouton de confirmation */}
-        <View style={styles.confirmContainer}>
+        {/* Espace pour le bouton de confirmation */}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Résumé de commande fixe en bas */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryHeader}>
+          <Text style={styles.summaryTitle}>Résumé de la commande</Text>
+          {cart?.business_name && (
+            <View style={styles.businessInfo}>
+              <MaterialIcons name="store" size={16} color="#4CAF50" />
+              <Text style={styles.businessName}>{cart.business_name}</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.summaryContent}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Sous-total</Text>
+            <Text style={styles.summaryValue}>{cartTotal.toLocaleString()} GNF</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>TVA (18%)</Text>
+            <Text style={styles.summaryValue}>{tax.toLocaleString()} GNF</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              {deliveryMethod === 'delivery' ? 'Frais de livraison' : 'Frais de préparation'}
+            </Text>
+            <Text style={styles.summaryValue}>{deliveryFee.toLocaleString()} GNF</Text>
+          </View>
+          
+          <View style={styles.summaryDivider} />
+          
+          <View style={styles.summaryRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>{grandTotal.toLocaleString()} GNF</Text>
+          </View>
+        </View>
+        
+        <View style={styles.deliveryInfo}>
+          <View style={styles.deliveryInfoContent}>
+            <MaterialIcons 
+              name={deliveryMethod === 'delivery' ? 'local-shipping' : 'store'} 
+              size={16} 
+              color="#E31837" 
+            />
+            <Text style={styles.deliveryInfoText}>
+              {deliveryMethod === 'delivery' ? 'Livraison à domicile' : 'À récupérer sur place'}
+            </Text>
+          </View>
+          <Text style={styles.deliveryTimeText}>
+            {deliveryMethod === 'delivery' 
+              ? 'Livraison estimée: 30-60 minutes' 
+              : 'Préparation estimée: 20-30 minutes'}
+          </Text>
+        </View>
+        
+        <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[
               styles.confirmButton,
@@ -446,14 +548,18 @@ export default function CheckoutScreen() {
             {loadingStates.convertToOrder ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <MaterialIcons name="check-circle" size={24} color="#FFF" />
+              <MaterialIcons name="shopping-cart-checkout" size={20} color="#FFF" />
             )}
             <Text style={styles.confirmButtonText}>
-              {loadingStates.convertToOrder ? 'Création en cours...' : 'Confirmer la commande'}
+              {loadingStates.convertToOrder ? 'Traitement...' : 'Passer la commande'}
             </Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.modifyCartButton} onPress={() => router.push('/cart')}>
+            <Text style={styles.modifyCartButtonText}>Modifier le panier</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -484,6 +590,9 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32,
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -569,89 +678,166 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: 'top',
   },
-  optionButton: {
+  deliveryOptionsContainer: {
+    gap: 12,
+  },
+  deliveryOptionCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  deliveryOptionCardActive: {
+    borderColor: '#E31837',
+    backgroundColor: '#fef2f2',
+  },
+  deliveryOptionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 0,
-    marginBottom: 8,
-  },
-  optionButtonActive: {
-    backgroundColor: '#f0f8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-  },
-  optionTitleActive: {
-    fontWeight: 'bold',
-  },
-  optionDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  orderItemInfo: {
+  deliveryOptionIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deliveryOptionRadio: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioButton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  radioButtonActive: {
+    backgroundColor: '#E31837',
+  },
+  radioButtonInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  deliveryOptionContent: {
     flex: 1,
   },
-  orderItemName: {
+  deliveryOptionTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#000',
+    marginBottom: 4,
   },
-  orderItemQuantity: {
+  deliveryOptionTitleActive: {
+    color: '#E31837',
+  },
+  deliveryOptionPrice: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 2,
+  },
+  deliveryOptionDescription: {
     fontSize: 14,
     color: '#666',
-    marginTop: 2,
   },
-  orderItemNote: {
-    fontSize: 12,
-    color: '#E31837',
-    marginTop: 2,
-    fontStyle: 'italic',
+  paymentOptionsContainer: {
+    gap: 12,
   },
-  orderItemTotal: {
+  paymentOptionCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  paymentOptionCardActive: {
+    borderColor: '#E31837',
+    backgroundColor: '#fef2f2',
+  },
+  paymentOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  paymentOptionIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentOptionRadio: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paymentOptionContent: {
+    flex: 1,
+  },
+  paymentOptionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 12,
+  paymentOptionTitleActive: {
+    color: '#E31837',
   },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  paymentEmoji: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  bottomSpacer: {
+    height: 16,
+  },
+  summaryContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    paddingTop: 12,
-    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  totalLabel: {
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  summaryTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
   },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#E31837',
+  businessInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  businessName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginLeft: 4,
+  },
+  summaryContent: {
+    marginBottom: 16,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -668,12 +854,45 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '500',
   },
-  confirmContainer: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 12,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#E31837',
+  },
+  deliveryInfo: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  deliveryInfoContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  deliveryInfoText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000',
+    marginLeft: 8,
+  },
+  deliveryTimeText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 24,
+  },
+  actionButtons: {
+    gap: 12,
   },
   confirmButton: {
     backgroundColor: '#E31837',
@@ -692,10 +911,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  termsText: {
-    fontSize: 12,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 12,
+  modifyCartButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: '#E31837',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modifyCartButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#E31837',
   },
 }); 
