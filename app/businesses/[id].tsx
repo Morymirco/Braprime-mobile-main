@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -19,6 +19,7 @@ import MenuSkeleton from '../../components/MenuSkeleton';
 import ToastContainer from '../../components/ToastContainer';
 import { useBusiness } from '../../hooks/useBusiness';
 import { useCart } from '../../hooks/useCart';
+import { useFavorites } from '../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../hooks/useMenu';
 import { useToast } from '../../hooks/useToast';
 
@@ -40,12 +41,40 @@ export default function BusinessDetailScreen() {
   const { categories, loading: categoriesLoading } = useMenuCategories(businessId);
   const { menuItems, loading: menuLoading } = useMenuItems(businessId);
   const { addToCart } = useCart();
+  const { addFavoriteBusiness, removeFavoriteBusiness, isBusinessFavorite, addFavoriteMenuItem, removeFavoriteMenuItem, isMenuItemFavorite } = useFavorites();
   const { showToast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteMenuItems, setFavoriteMenuItems] = useState<Set<number>>(new Set());
+
+  // Vérifier l'état des favoris au chargement
+  useEffect(() => {
+    const checkFavorites = async () => {
+      if (business) {
+        // Vérifier si le commerce est en favori
+        const businessFavorite = await isBusinessFavorite(business.id.toString());
+        setIsFavorite(businessFavorite);
+        
+        // Vérifier les articles favoris
+        const favoriteItems = new Set<number>();
+        for (const item of menuItems) {
+          const isFavorite = await isMenuItemFavorite(item.id.toString());
+          if (isFavorite) {
+            favoriteItems.add(item.id);
+          }
+        }
+        setFavoriteMenuItems(favoriteItems);
+      }
+    };
+
+    if (business && menuItems.length > 0) {
+      checkFavorites();
+    }
+  }, [business, menuItems, isBusinessFavorite, isMenuItemFavorite]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -69,12 +98,6 @@ export default function BusinessDetailScreen() {
   const handleEmailPress = () => {
     if (business?.email) {
       Linking.openURL(`mailto:${business.email}`);
-    }
-  };
-
-  const handleOrderPress = () => {
-    if (business) {
-      router.push(`/checkout?businessId=${business.id}`);
     }
   };
 
@@ -117,6 +140,88 @@ export default function BusinessDetailScreen() {
     } catch (error) {
       showToast('error', 'Erreur lors de l\'ajout au panier');
       console.error('Erreur lors de l\'ajout au panier:', error);
+    }
+  };
+
+  const handleQuickAddToCart = async (item: MenuItemWithCategory) => {
+    if (!business) {
+      showToast('error', 'Erreur: Commerce non trouvé');
+      return;
+    }
+
+    setAddingToCart(item.id);
+    try {
+      const result = await addToCart(
+        {
+          menu_item_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          image: item.image,
+          special_instructions: '',
+        },
+        business.id,
+        business.name
+      );
+
+      if (result.success) {
+        showToast('success', `${item.name} ajouté au panier`);
+      } else {
+        showToast('error', result.error || 'Erreur lors de l\'ajout au panier');
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de l\'ajout au panier');
+      console.error('Erreur lors de l\'ajout au panier:', error);
+    } finally {
+      setAddingToCart(null);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!business) return;
+
+    try {
+      if (isFavorite) {
+        const result = await removeFavoriteBusiness(business.id.toString());
+        if (result.success) {
+          setIsFavorite(false);
+          showToast('success', 'Commerce retiré des favoris');
+        }
+      } else {
+        const result = await addFavoriteBusiness(business.id.toString());
+        if (result.success) {
+          setIsFavorite(true);
+          showToast('success', 'Commerce ajouté aux favoris');
+        }
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la gestion des favoris');
+    }
+  };
+
+  const handleToggleMenuItemFavorite = async (item: MenuItemWithCategory) => {
+    try {
+      const isItemFavorite = favoriteMenuItems.has(item.id);
+      
+      if (isItemFavorite) {
+        const result = await removeFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setFavoriteMenuItems(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(item.id);
+            return newSet;
+          });
+          showToast('success', 'Article retiré des favoris');
+        }
+      } else {
+        const result = await addFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setFavoriteMenuItems(prev => new Set(prev).add(item.id));
+          showToast('success', 'Article ajouté aux favoris');
+        }
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la gestion des favoris');
     }
   };
 
@@ -221,6 +326,13 @@ export default function BusinessDetailScreen() {
             </Text>
           </View>
         </View>
+        <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
+          <MaterialIcons 
+            name={isFavorite ? "favorite" : "favorite-border"} 
+            size={24} 
+            color={isFavorite ? "#E31837" : "#666"} 
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -235,19 +347,57 @@ export default function BusinessDetailScreen() {
           />
         }
       >
-        {/* Image de couverture */}
-        <Image
-          source={{
-            uri: business.cover_image || business.logo || 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=400&q=80'
-          }}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
+        {/* Image de couverture avec overlay et informations */}
+        <View style={styles.coverContainer}>
+          <Image
+            source={{
+              uri: business.cover_image || business.logo || 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=400&q=80'
+            }}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
+          <View style={styles.coverOverlay} />
+          
+          {/* Informations superposées */}
+          <View style={styles.coverInfo}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={{
+                  uri: business.logo || business.cover_image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&q=80'
+                }}
+                style={styles.businessLogo}
+                resizeMode="cover"
+              />
+            </View>
+            
+            <View style={styles.businessInfo}>
+              <Text style={styles.businessName}>{business.name}</Text>
+              
+              <View style={styles.businessMeta}>
+                {business.cuisine_type && (
+                  <Text style={styles.cuisineType}>{business.cuisine_type}</Text>
+                )}
+                
+                <View style={styles.ratingContainer}>
+                  <View style={styles.starsContainer}>
+                    {renderStars(business.rating)}
+                  </View>
+                  <Text style={styles.ratingText}>
+                    {business.rating.toFixed(1)} ({business.review_count})
+                  </Text>
+                </View>
+                
+                <View style={styles.deliveryInfo}>
+                  <MaterialIcons name="access-time" size={16} color="#FFF" />
+                  <Text style={styles.deliveryText}>{business.delivery_time}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
 
         {/* Informations principales */}
         <View style={styles.mainInfo}>
-          <Text style={styles.businessName}>{business.name}</Text>
-          
           {business.description && (
             <Text style={styles.description}>{business.description}</Text>
           )}
@@ -259,26 +409,16 @@ export default function BusinessDetailScreen() {
             </View>
           </View>
 
-          {/* Note et avis */}
-          <View style={styles.ratingContainer}>
-            <View style={styles.starsContainer}>
-              {renderStars(business.rating)}
-            </View>
-            <Text style={styles.ratingText}>
-              {business.rating.toFixed(1)} ({business.review_count} avis)
+          {/* Statut d'ouverture */}
+          <View style={styles.statusContainer}>
+            <View style={[
+              styles.statusIndicator,
+              { backgroundColor: business.is_open ? '#00C853' : '#E31837' }
+            ]} />
+            <Text style={styles.statusText}>
+              {business.is_open ? 'Ouvert' : 'Fermé'}
             </Text>
           </View>
-        </View>
-
-        {/* Actions principales */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.primaryButton]} 
-            onPress={handleOrderPress}
-          >
-            <MaterialIcons name="shopping-cart" size={20} color="#FFF" />
-            <Text style={styles.primaryButtonText}>Commander</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Section Menu */}
@@ -349,7 +489,12 @@ export default function BusinessDetailScreen() {
                   </View>
                 ) : (
                   filteredMenuItems.map((item) => (
-                    <View key={item.id} style={styles.menuItemCard}>
+                    <TouchableOpacity 
+                      key={item.id} 
+                      style={styles.menuItemCard}
+                      onPress={() => handleMenuItemPress(item)}
+                      activeOpacity={0.7}
+                    >
                       <Image
                         source={{
                           uri: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&q=80'
@@ -360,11 +505,26 @@ export default function BusinessDetailScreen() {
                       <View style={styles.menuItemContent}>
                         <View style={styles.menuItemHeader}>
                           <Text style={styles.menuItemName}>{item.name}</Text>
-                          {item.is_popular && (
-                            <View style={styles.popularBadge}>
-                              <Text style={styles.popularText}>Populaire</Text>
-                            </View>
-                          )}
+                          <View style={styles.menuItemBadges}>
+                            {item.is_popular && (
+                              <View style={styles.popularBadge}>
+                                <Text style={styles.popularText}>Populaire</Text>
+                              </View>
+                            )}
+                            <TouchableOpacity
+                              style={styles.favoriteButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleToggleMenuItemFavorite(item);
+                              }}
+                            >
+                              <MaterialIcons 
+                                name={favoriteMenuItems.has(item.id) ? "favorite" : "favorite-border"} 
+                                size={20} 
+                                color={favoriteMenuItems.has(item.id) ? "#E31837" : "#666"} 
+                              />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         
                         {item.description && (
@@ -379,21 +539,24 @@ export default function BusinessDetailScreen() {
                           </Text>
                           <TouchableOpacity 
                             style={[
-                              styles.addButton,
-                              addingToCart === item.id && styles.addButtonLoading
+                              styles.addToCartButton,
+                              addingToCart === item.id && styles.addToCartButtonLoading
                             ]}
-                            onPress={() => handleMenuItemPress(item)}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleQuickAddToCart(item);
+                            }}
                             disabled={addingToCart === item.id}
                           >
                             {addingToCart === item.id ? (
                               <MaterialIcons name="hourglass-empty" size={20} color="#E31837" />
                             ) : (
-                              <MaterialIcons name="add" size={20} color="#E31837" />
+                              <MaterialIcons name="add-shopping-cart" size={20} color="#E31837" />
                             )}
                           </TouchableOpacity>
                         </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ))
                 )}
               </View>
@@ -524,19 +687,88 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  coverImage: {
-    width: '100%',
+  coverContainer: {
     height: 200,
   },
-  mainInfo: {
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  coverInfo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     padding: 16,
-    backgroundColor: '#fff',
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+    borderWidth: 4,
+    borderColor: '#FFF',
+    overflow: 'hidden',
+  },
+  businessLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  businessInfo: {
+    flex: 1,
   },
   businessName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#FFF',
     marginBottom: 8,
+  },
+  businessMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  cuisineType: {
+    fontSize: 14,
+    color: '#FFF',
+    marginRight: 12,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginRight: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#FFF',
+  },
+  deliveryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deliveryText: {
+    fontSize: 14,
+    color: '#FFF',
+    marginLeft: 4,
+  },
+  mainInfo: {
+    padding: 16,
+    backgroundColor: '#fff',
   },
   description: {
     fontSize: 16,
@@ -558,41 +790,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  ratingContainer: {
+  statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  starsContainer: {
-    flexDirection: 'row',
-    marginRight: 8,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
+  statusIndicator: {
+    width: 16,
+    height: 16,
     borderRadius: 8,
-  },
-  primaryButton: {
-    backgroundColor: '#E31837',
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    marginRight: 8,
   },
   menuSection: {
     marginTop: 8,
@@ -666,6 +873,10 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  menuItemBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   popularBadge: {
     backgroundColor: '#FFD700',
     paddingHorizontal: 6,
@@ -693,17 +904,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E31837',
   },
-  addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E31837',
-    alignItems: 'center',
-    justifyContent: 'center',
+  addToCartButton: {
+    padding: 8,
   },
-  addButtonLoading: {
+  addToCartButtonLoading: {
     backgroundColor: '#f5f5f5',
     borderColor: '#ccc',
   },
@@ -762,11 +966,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  deliveryText: {
-    fontSize: 16,
-    color: '#666',
-    marginLeft: 12,
-  },
   bottomSpacer: {
     height: 20,
   },
@@ -799,5 +998,8 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  favoriteButton: {
+    padding: 8,
   },
 }); 

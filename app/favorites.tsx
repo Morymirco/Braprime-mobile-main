@@ -13,12 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ToastContainer from '../components/ToastContainer';
+import { useFavorites } from '../hooks/useFavorites';
 import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
-// Types pour les favoris
+// Types pour les favoris (utilisant les types du service)
 interface FavoriteBusiness {
   id: string;
   name: string;
@@ -51,88 +52,24 @@ export default function FavoritesScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
   
+  // Utiliser le hook useFavorites pour récupérer les vraies données
+  const { 
+    favoriteBusinesses, 
+    favoriteMenuItems, 
+    loading, 
+    error,
+    removeFavoriteBusiness,
+    removeFavoriteMenuItem,
+    refetch 
+  } = useFavorites();
+  
   const [activeTab, setActiveTab] = useState<'businesses' | 'menu'>('businesses');
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  // Données de démonstration pour les favoris
-  const [favoriteBusinesses, setFavoriteBusinesses] = useState<FavoriteBusiness[]>([
-    {
-      id: '1',
-      name: 'Restaurant Le Gourmet',
-      description: 'Cuisine française raffinée',
-      image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
-      address: '123 Rue de la Paix, Conakry',
-      rating: 4.5,
-      delivery_time: '30-45 min',
-      minimum_order: 15000,
-      is_open: true,
-      business_type: { id: 1, name: 'Restaurant' }
-    },
-    {
-      id: '2',
-      name: 'Pizza Express',
-      description: 'Pizzas authentiques italiennes',
-      image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&q=80',
-      address: '456 Avenue du Commerce, Conakry',
-      rating: 4.2,
-      delivery_time: '25-35 min',
-      minimum_order: 12000,
-      is_open: true,
-      business_type: { id: 2, name: 'Pizzeria' }
-    },
-    {
-      id: '3',
-      name: 'Café Central',
-      description: 'Café et pâtisseries artisanales',
-      image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&q=80',
-      address: '789 Boulevard de la République, Conakry',
-      rating: 4.7,
-      delivery_time: '20-30 min',
-      minimum_order: 8000,
-      is_open: false,
-      business_type: { id: 3, name: 'Café' }
-    }
-  ]);
-
-  const [favoriteMenuItems, setFavoriteMenuItems] = useState<FavoriteMenuItem[]>([
-    {
-      id: '1',
-      name: 'Pizza Margherita',
-      description: 'Sauce tomate, mozzarella, basilic frais',
-      price: 18000,
-      image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&q=80',
-      business_name: 'Pizza Express',
-      business_id: '2',
-      is_popular: true
-    },
-    {
-      id: '2',
-      name: 'Burger Classique',
-      description: 'Steak, fromage, salade, tomate, oignon',
-      price: 15000,
-      image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
-      business_name: 'Restaurant Le Gourmet',
-      business_id: '1',
-      is_popular: false
-    },
-    {
-      id: '3',
-      name: 'Cappuccino',
-      description: 'Café italien avec mousse de lait crémeuse',
-      price: 5000,
-      image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&q=80',
-      business_name: 'Café Central',
-      business_id: '3',
-      is_popular: true
-    }
-  ]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Simuler un chargement
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await refetch();
       showToast('success', 'Favoris actualisés');
     } catch (error) {
       showToast('error', 'Erreur lors de l\'actualisation');
@@ -141,23 +78,64 @@ export default function FavoritesScreen() {
     }
   };
 
-  const handleRemoveFavoriteBusiness = (businessId: string) => {
-    setFavoriteBusinesses(prev => prev.filter(business => business.id !== businessId));
-    showToast('success', 'Commerce retiré des favoris');
+  const handleRemoveFavoriteBusiness = async (businessId: string) => {
+    try {
+      const result = await removeFavoriteBusiness(businessId);
+      if (result.success) {
+        showToast('success', 'Commerce retiré des favoris');
+      } else {
+        showToast('error', result.error || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la suppression');
+    }
   };
 
-  const handleRemoveFavoriteMenuItem = (itemId: string) => {
-    setFavoriteMenuItems(prev => prev.filter(item => item.id !== itemId));
-    showToast('success', 'Article retiré des favoris');
+  const handleRemoveFavoriteMenuItem = async (itemId: string) => {
+    try {
+      const result = await removeFavoriteMenuItem(itemId);
+      if (result.success) {
+        showToast('success', 'Article retiré des favoris');
+      } else {
+        showToast('error', result.error || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la suppression');
+    }
   };
 
-  const handleBusinessPress = (business: FavoriteBusiness) => {
-    router.push(`/businesses/${business.id}`);
+  const handleBusinessPress = (business: any) => {
+    router.push(`/businesses/${business.business_id || business.id}`);
   };
 
-  const handleMenuItemPress = (item: FavoriteMenuItem) => {
-    router.push(`/businesses/${item.business_id}`);
+  const handleMenuItemPress = (item: any) => {
+    router.push(`/businesses/${item.business_id || item.business?.id}`);
   };
+
+  // Adapter les données du service pour l'affichage
+  const adaptedBusinesses = favoriteBusinesses.map(fav => ({
+    id: fav.business_id,
+    name: fav.business.name,
+    description: fav.business.description || '',
+    image: fav.business.cover_image || fav.business.logo || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
+    address: fav.business.address || '',
+    rating: fav.business.rating || 0,
+    delivery_time: fav.business.delivery_time || '30-45 min',
+    minimum_order: fav.business.delivery_fee || 0,
+    is_open: fav.business.is_open !== false,
+    business_type: fav.business.business_type || { id: 1, name: 'Commerce' }
+  }));
+
+  const adaptedMenuItems = favoriteMenuItems.map(fav => ({
+    id: fav.menu_item_id,
+    name: fav.menu_item.name,
+    description: fav.menu_item.description || '',
+    price: fav.menu_item.price || 0,
+    image: fav.menu_item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&q=80',
+    business_name: fav.menu_item.business?.name || 'Commerce',
+    business_id: fav.menu_item.business?.id || '',
+    is_popular: fav.menu_item.is_popular || false
+  }));
 
   const renderBusinessItem = ({ item }: { item: FavoriteBusiness }) => (
     <TouchableOpacity 
@@ -273,6 +251,33 @@ export default function FavoritesScreen() {
     );
   }
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Chargement des favoris...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <MaterialIcons name="error-outline" size={64} color="#F44336" />
+          <Text style={styles.errorTitle}>Erreur de chargement</Text>
+          <Text style={styles.errorMessage}>
+            Impossible de charger vos favoris. Veuillez réessayer.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ToastContainer />
@@ -302,7 +307,7 @@ export default function FavoritesScreen() {
             styles.tabText,
             activeTab === 'businesses' && styles.activeTabText
           ]}>
-            Commerces ({favoriteBusinesses.length})
+            Commerces ({adaptedBusinesses.length})
           </Text>
         </TouchableOpacity>
         
@@ -317,14 +322,14 @@ export default function FavoritesScreen() {
             styles.tabText,
             activeTab === 'menu' && styles.activeTabText
           ]}>
-            Articles ({favoriteMenuItems.length})
+            Articles ({adaptedMenuItems.length})
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Content */}
       <FlatList
-        data={activeTab === 'businesses' ? favoriteBusinesses : favoriteMenuItems}
+        data={activeTab === 'businesses' ? adaptedBusinesses : adaptedMenuItems}
         renderItem={activeTab === 'businesses' ? renderBusinessItem : renderMenuItem}
         keyExtractor={(item) => item.id}
         style={styles.list}
@@ -646,5 +651,26 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  retryButton: {
+    backgroundColor: '#E31837',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

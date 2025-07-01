@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -11,6 +11,8 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useFavorites } from '../hooks/useFavorites';
+import { useToast } from '../hooks/useToast';
 import { MenuItemWithCategory } from '../lib/services/MenuService';
 
 const { width, height } = Dimensions.get('window');
@@ -26,6 +28,23 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const { addFavoriteMenuItem, removeFavoriteMenuItem, isMenuItemFavorite } = useFavorites();
+  const { showToast } = useToast();
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  // Vérifier l'état des favoris au chargement
+  useEffect(() => {
+    const checkFavorite = async () => {
+      if (item) {
+        const favorite = await isMenuItemFavorite(item.id.toString());
+        setIsFavorite(favorite);
+      }
+    };
+
+    if (item && visible) {
+      checkFavorite();
+    }
+  }, [item, visible, isMenuItemFavorite]);
 
   if (!item) return null;
 
@@ -46,6 +65,26 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
       console.error('Erreur lors de l\'ajout au panier:', error);
     } finally {
       setIsAddingToCart(false);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    try {
+      if (isFavorite) {
+        const result = await removeFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setIsFavorite(false);
+          showToast('success', 'Article retiré des favoris');
+        }
+      } else {
+        const result = await addFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setIsFavorite(true);
+          showToast('success', 'Article ajouté aux favoris');
+        }
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la gestion des favoris');
     }
   };
 
@@ -92,7 +131,13 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
             <MaterialIcons name="close" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Détails de l'article</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
+            <MaterialIcons 
+              name={isFavorite ? "favorite" : "favorite-border"} 
+              size={24} 
+              color={isFavorite ? "#E31837" : "#666"} 
+            />
+          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -232,7 +277,7 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
           </View>
         </ScrollView>
 
-        {/* Bouton d'action */}
+        {/* Boutons d'action */}
         <View style={styles.actionContainer}>
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Total:</Text>
@@ -285,8 +330,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
   },
-  placeholder: {
-    width: 32,
+  favoriteButton: {
+    padding: 4,
   },
   content: {
     flex: 1,

@@ -9,11 +9,12 @@ export interface FavoriteBusiness {
     id: string;
     name: string;
     description: string;
-    image: string;
+    cover_image: string | null;
+    logo: string | null;
     address: string;
     rating: number;
     delivery_time: string;
-    minimum_order: number;
+    delivery_fee: number;
     is_open: boolean;
     business_type: {
       id: number;
@@ -32,7 +33,7 @@ export interface FavoriteMenuItem {
     name: string;
     description: string;
     price: number;
-    image: string;
+    image: string | null;
     is_popular: boolean;
     business: {
       id: string;
@@ -56,11 +57,12 @@ export class FavoritesService {
             id,
             name,
             description,
-            image,
+            cover_image,
+            logo,
             address,
             rating,
             delivery_time,
-            minimum_order,
+            delivery_fee,
             is_open,
             business_type:business_types (
               id,
@@ -249,10 +251,10 @@ export class FavoritesService {
     }
   }
 
-  // Supprimer tous les favoris d'un utilisateur
+  // Vider tous les favoris d'un utilisateur
   static async clearAllFavorites(userId: string): Promise<boolean> {
     try {
-      // Supprimer les commerces favoris
+      // Supprimer tous les commerces favoris
       const { error: businessError } = await supabase
         .from('favorite_businesses')
         .delete()
@@ -262,7 +264,7 @@ export class FavoritesService {
         throw new Error(businessError.message);
       }
 
-      // Supprimer les articles favoris
+      // Supprimer tous les articles favoris
       const { error: menuError } = await supabase
         .from('favorite_menu_items')
         .delete()
@@ -274,7 +276,7 @@ export class FavoritesService {
 
       return true;
     } catch (error) {
-      console.error('Erreur lors de la suppression de tous les favoris:', error);
+      console.error('Erreur lors du vidage des favoris:', error);
       throw error;
     }
   }

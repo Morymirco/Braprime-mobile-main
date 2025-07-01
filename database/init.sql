@@ -348,6 +348,73 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 -- ============================================================================
+-- TABLES DES FAVORIS (NOUVELLES)
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS favorite_businesses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, business_id)
+);
+
+CREATE TABLE IF NOT EXISTS favorite_menu_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    menu_item_id INTEGER NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, menu_item_id)
+);
+
+-- =========================================================================
+-- TABLES DU PANIER (NOUVELLES)
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS cart (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    business_id INTEGER REFERENCES businesses(id) ON DELETE CASCADE,
+    business_name VARCHAR(200),
+    items JSONB NOT NULL DEFAULT '[]',
+    delivery_method VARCHAR(20) DEFAULT 'delivery',
+    delivery_address TEXT,
+    delivery_instructions TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS cart_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cart_id UUID NOT NULL REFERENCES cart(id) ON DELETE CASCADE,
+    menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    price INTEGER NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    image VARCHAR(500),
+    special_instructions TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =========================================================================
+-- TABLE DE LIAISON DRIVER_PROFILES (NOUVELLE)
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS driver_profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_profile_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+    vehicle_type VARCHAR(50),
+    vehicle_plate VARCHAR(20),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_profile_id, driver_id)
+);
+
+-- ============================================================================
 -- INDEX POUR LES PERFORMANCES
 -- ============================================================================
 
@@ -388,6 +455,21 @@ CREATE INDEX IF NOT EXISTS idx_drivers_current_order ON drivers(current_order_id
 
 -- Index pour les paiements
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+
+-- Index pour les nouvelles tables
+CREATE INDEX IF NOT EXISTS idx_favorite_businesses_user ON favorite_businesses(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_businesses_business ON favorite_businesses(business_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_menu_items_user ON favorite_menu_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_menu_items_menu_item ON favorite_menu_items(menu_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_cart_user ON cart(user_id);
+CREATE INDEX IF NOT EXISTS idx_cart_business ON cart(business_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_menu_item ON cart_items(menu_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_driver_profiles_user_profile ON driver_profiles(user_profile_id);
+CREATE INDEX IF NOT EXISTS idx_driver_profiles_driver ON driver_profiles(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_profiles_active ON driver_profiles(is_active);
 
 -- ============================================================================
 -- DONNÉES INITIALES
@@ -585,6 +667,227 @@ FROM orders o
 LEFT JOIN user_profiles up ON o.user_id = up.id
 LEFT JOIN businesses b ON o.business_id = b.id;
 
+-- =========================================================================
+-- FONCTIONS SPÉCIFIQUES AU DRIVER
+-- =========================================================================
+
+-- Fonction pour assigner automatiquement le rôle 'driver' à un utilisateur
+CREATE OR REPLACE FUNCTION assign_driver_role()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Mettre à jour le rôle dans user_profiles
+    UPDATE user_profiles 
+    SET role_id = (SELECT id FROM user_roles WHERE name = 'driver')
+    WHERE id = NEW.user_profile_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =========================================================================
+-- FONCTIONS SPÉCIFIQUES AU PANIER
+-- =========================================================================
+
+-- Fonction pour calculer le total du panier
+CREATE OR REPLACE FUNCTION calculate_cart_total(cart_uuid UUID)
+RETURNS INTEGER AS $$
+DECLARE
+    total INTEGER := 0;
+BEGIN
+    SELECT COALESCE(SUM(ci.price * ci.quantity), 0)
+    INTO total
+    FROM cart_items ci
+    WHERE ci.cart_id = cart_uuid;
+    RETURN total;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Fonction pour obtenir le nombre d'articles dans le panier
+CREATE OR REPLACE FUNCTION get_cart_item_count(cart_uuid UUID)
+RETURNS INTEGER AS $$
+DECLARE
+    item_count INTEGER := 0;
+BEGIN
+    SELECT COALESCE(SUM(ci.quantity), 0)
+    INTO item_count
+    FROM cart_items ci
+    WHERE ci.cart_id = cart_uuid;
+    RETURN item_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =========================================================================
+-- FONCTIONS SPÉCIFIQUES AUX FAVORIS
+-- =========================================================================
+
+-- Fonction pour ajouter un business aux favoris
+CREATE OR REPLACE FUNCTION add_business_to_favorites(
+    p_user_id UUID,
+    p_business_id INTEGER
+)
+RETURNS JSON AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM businesses WHERE id = p_business_id AND is_active = true) THEN
+        RETURN json_build_object('success', false, 'error', 'Business non trouvé ou inactif');
+    END IF;
+    INSERT INTO favorite_businesses (user_id, business_id)
+    VALUES (p_user_id, p_business_id)
+    ON CONFLICT (user_id, business_id) DO NOTHING;
+    RETURN json_build_object('success', true, 'message', 'Business ajouté aux favoris');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour retirer un business des favoris
+CREATE OR REPLACE FUNCTION remove_business_from_favorites(
+    p_user_id UUID,
+    p_business_id INTEGER
+)
+RETURNS JSON AS $$
+BEGIN
+    DELETE FROM favorite_businesses 
+    WHERE user_id = p_user_id AND business_id = p_business_id;
+    RETURN json_build_object('success', true, 'message', 'Business retiré des favoris');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour ajouter un menu item aux favoris
+CREATE OR REPLACE FUNCTION add_menu_item_to_favorites(
+    p_user_id UUID,
+    p_menu_item_id INTEGER
+)
+RETURNS JSON AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM menu_items WHERE id = p_menu_item_id AND is_available = true) THEN
+        RETURN json_build_object('success', false, 'error', 'Menu item non trouvé ou indisponible');
+    END IF;
+    INSERT INTO favorite_menu_items (user_id, menu_item_id)
+    VALUES (p_user_id, p_menu_item_id)
+    ON CONFLICT (user_id, menu_item_id) DO NOTHING;
+    RETURN json_build_object('success', true, 'message', 'Menu item ajouté aux favoris');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour retirer un menu item des favoris
+CREATE OR REPLACE FUNCTION remove_menu_item_from_favorites(
+    p_user_id UUID,
+    p_menu_item_id INTEGER
+)
+RETURNS JSON AS $$
+BEGIN
+    DELETE FROM favorite_menu_items 
+    WHERE user_id = p_user_id AND menu_item_id = p_menu_item_id;
+    RETURN json_build_object('success', true, 'message', 'Menu item retiré des favoris');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour vérifier si un business est en favoris
+CREATE OR REPLACE FUNCTION is_business_favorite(
+    p_user_id UUID,
+    p_business_id INTEGER
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM favorite_businesses 
+        WHERE user_id = p_user_id AND business_id = p_business_id
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour vérifier si un menu item est en favoris
+CREATE OR REPLACE FUNCTION is_menu_item_favorite(
+    p_user_id UUID,
+    p_menu_item_id INTEGER
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM favorite_menu_items 
+        WHERE user_id = p_user_id AND menu_item_id = p_menu_item_id
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Nouvelles vues utiles
+CREATE OR REPLACE VIEW cart_details AS
+SELECT 
+    c.id as cart_id,
+    c.user_id,
+    c.business_id,
+    c.business_name,
+    c.delivery_method,
+    c.delivery_address,
+    c.delivery_instructions,
+    c.created_at,
+    c.updated_at,
+    calculate_cart_total(c.id) as total,
+    get_cart_item_count(c.id) as item_count,
+    json_agg(
+        json_build_object(
+            'id', ci.id,
+            'menu_item_id', ci.menu_item_id,
+            'name', ci.name,
+            'price', ci.price,
+            'quantity', ci.quantity,
+            'image', ci.image,
+            'special_instructions', ci.special_instructions,
+            'subtotal', ci.price * ci.quantity
+        )
+    ) as items
+FROM cart c
+LEFT JOIN cart_items ci ON c.id = ci.cart_id
+GROUP BY c.id, c.user_id, c.business_id, c.business_name, c.delivery_method, c.delivery_address, c.delivery_instructions, c.created_at, c.updated_at;
+
+CREATE OR REPLACE VIEW businesses_with_favorites AS
+SELECT 
+    b.*,
+    CASE WHEN fb.user_id IS NOT NULL THEN true ELSE false END as is_favorite,
+    fb.created_at as favorited_at
+FROM businesses b
+LEFT JOIN favorite_businesses fb ON b.id = fb.business_id AND fb.user_id = auth.uid()
+WHERE b.is_active = true;
+
+CREATE OR REPLACE VIEW menu_items_with_favorites AS
+SELECT 
+    mi.*,
+    CASE WHEN fmi.user_id IS NOT NULL THEN true ELSE false END as is_favorite,
+    fmi.created_at as favorited_at
+FROM menu_items mi
+LEFT JOIN favorite_menu_items fmi ON mi.id = fmi.menu_item_id AND fmi.user_id = auth.uid()
+WHERE mi.is_available = true;
+
+CREATE OR REPLACE VIEW user_favorite_businesses AS
+SELECT 
+    b.*,
+    fb.created_at as favorited_at
+FROM favorite_businesses fb
+JOIN businesses b ON fb.business_id = b.id
+WHERE fb.user_id = auth.uid() AND b.is_active = true;
+
+CREATE OR REPLACE VIEW user_favorite_menu_items AS
+SELECT 
+    mi.*,
+    b.name as business_name,
+    b.id as business_id,
+    fmi.created_at as favorited_at
+FROM favorite_menu_items fmi
+JOIN menu_items mi ON fmi.menu_item_id = mi.id
+JOIN businesses b ON mi.business_id = b.id
+WHERE fmi.user_id = auth.uid() AND mi.is_available = true AND b.is_active = true;
+
+-- Fin des fonctions utilitaires ajoutées.
+
 -- ============================================================================
 -- FIN DU SCRIPT
 -- ============================================================================
@@ -596,4 +899,122 @@ BEGIN
     RAISE NOTICE 'Tables créées: user_profiles, businesses, orders, reservations, etc.';
     RAISE NOTICE 'Données initiales insérées: rôles, statuts, catégories, etc.';
     RAISE NOTICE 'Index et politiques de sécurité configurés.';
-END $$; 
+END $$;
+
+-- Triggers pour mettre à jour updated_at sur les nouvelles tables
+CREATE TRIGGER update_cart_updated_at BEFORE UPDATE ON cart FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_cart_items_updated_at BEFORE UPDATE ON cart_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_driver_profiles_updated_at BEFORE UPDATE ON driver_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger pour assigner automatiquement le rôle driver
+DROP TRIGGER IF EXISTS trigger_assign_driver_role ON driver_profiles;
+CREATE TRIGGER trigger_assign_driver_role
+    AFTER INSERT ON driver_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION assign_driver_role();
+
+-- Activer RLS sur les nouvelles tables
+ALTER TABLE favorite_businesses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE favorite_menu_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE driver_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cart ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
+
+-- Politiques pour favorite_businesses
+CREATE POLICY "Users can view their own favorite businesses" ON favorite_businesses
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can add businesses to favorites" ON favorite_businesses
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can remove businesses from favorites" ON favorite_businesses
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Politiques pour favorite_menu_items
+CREATE POLICY "Users can view their own favorite menu items" ON favorite_menu_items
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can add menu items to favorites" ON favorite_menu_items
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can remove menu items from favorites" ON favorite_menu_items
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Politiques pour driver_profiles
+CREATE POLICY "Drivers can view their own profile" ON driver_profiles
+    FOR SELECT USING (
+        user_profile_id IN (
+            SELECT up.id 
+            FROM user_profiles up 
+            WHERE up.id = auth.uid()
+        )
+    );
+CREATE POLICY "Drivers can update their own profile" ON driver_profiles
+    FOR UPDATE USING (
+        user_profile_id IN (
+            SELECT up.id 
+            FROM user_profiles up 
+            WHERE up.id = auth.uid()
+        )
+    );
+CREATE POLICY "Partners can view their drivers profiles" ON driver_profiles
+    FOR SELECT USING (
+        driver_id IN (
+            SELECT d.id 
+            FROM drivers d 
+            JOIN businesses b ON d.business_id = b.id 
+            WHERE b.owner_id = auth.uid()
+        )
+    );
+CREATE POLICY "Partners can create driver profiles" ON driver_profiles
+    FOR INSERT WITH CHECK (
+        driver_id IN (
+            SELECT d.id 
+            FROM drivers d 
+            JOIN businesses b ON d.business_id = b.id 
+            WHERE b.owner_id = auth.uid()
+        )
+    );
+CREATE POLICY "System can create driver profiles" ON driver_profiles
+    FOR INSERT WITH CHECK (true);
+
+-- Politiques pour cart
+CREATE POLICY "Users can view their own cart" ON cart
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create their own cart" ON cart
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own cart" ON cart
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own cart" ON cart
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Politiques pour cart_items
+CREATE POLICY "Users can view their own cart items" ON cart_items
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM cart 
+            WHERE cart.id = cart_items.cart_id 
+            AND cart.user_id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can create items in their own cart" ON cart_items
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM cart 
+            WHERE cart.id = cart_items.cart_id 
+            AND cart.user_id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can update items in their own cart" ON cart_items
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM cart 
+            WHERE cart.id = cart_items.cart_id 
+            AND cart.user_id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can delete items from their own cart" ON cart_items
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM cart 
+            WHERE cart.id = cart_items.cart_id 
+            AND cart.user_id = auth.uid()
+        )
+    );
+-- Fin des politiques RLS ajoutées 

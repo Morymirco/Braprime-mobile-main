@@ -16,6 +16,7 @@ import MenuItemDetail from '../../../components/MenuItemDetail';
 import ToastContainer from '../../../components/ToastContainer';
 import { useBusiness } from '../../../hooks/useBusiness';
 import { useCart } from '../../../hooks/useCart';
+import { useFavorites } from '../../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../../hooks/useMenu';
 import { useToast } from '../../../hooks/useToast';
 import { MenuItemWithCategory } from '../../../lib/services/MenuService';
@@ -29,12 +30,15 @@ export default function BusinessMenuScreen() {
   const { categories, loading: categoriesLoading, error: categoriesError } = useMenuCategories(id);
   const { menuItems, loading: menuItemsLoading, error: menuItemsError } = useMenuItems(id);
   const { addToCart } = useCart();
+  const { addFavoriteMenuItem, removeFavoriteMenuItem, isMenuItemFavorite } = useFavorites();
   const { showToast } = useToast();
   
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [addingToCart, setAddingToCart] = useState<number | null>(null);
+  const [favoriteItems, setFavoriteItems] = useState<Set<number>>(new Set());
 
   // Sélectionner automatiquement la première catégorie si aucune n'est sélectionnée
   useEffect(() => {
@@ -42,6 +46,24 @@ export default function BusinessMenuScreen() {
       setSelectedCategory(categories[0].id);
     }
   }, [categories, selectedCategory]);
+
+  // Vérifier l'état des favoris au chargement
+  useEffect(() => {
+    const checkFavorites = async () => {
+      const favoriteItemsSet = new Set<number>();
+      for (const item of menuItems) {
+        const isFavorite = await isMenuItemFavorite(item.id.toString());
+        if (isFavorite) {
+          favoriteItemsSet.add(item.id);
+        }
+      }
+      setFavoriteItems(favoriteItemsSet);
+    };
+
+    if (menuItems.length > 0) {
+      checkFavorites();
+    }
+  }, [menuItems, isMenuItemFavorite]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -92,6 +114,66 @@ export default function BusinessMenuScreen() {
     } catch (error) {
       showToast('error', 'Erreur lors de l\'ajout au panier');
       console.error('Erreur lors de l\'ajout au panier:', error);
+    }
+  };
+
+  const handleQuickAddToCart = async (item: MenuItemWithCategory) => {
+    if (!business) {
+      showToast('error', 'Erreur: Commerce non trouvé');
+      return;
+    }
+
+    setAddingToCart(item.id);
+    try {
+      const result = await addToCart(
+        {
+          menu_item_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          image: item.image,
+          special_instructions: '',
+        },
+        business.id,
+        business.name
+      );
+
+      if (result.success) {
+        showToast('success', `${item.name} ajouté au panier`);
+      } else {
+        showToast('error', result.error || 'Erreur lors de l\'ajout au panier');
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de l\'ajout au panier');
+      console.error('Erreur lors de l\'ajout au panier:', error);
+    } finally {
+      setAddingToCart(null);
+    }
+  };
+
+  const handleToggleFavorite = async (item: MenuItemWithCategory) => {
+    try {
+      const isFavorite = favoriteItems.has(item.id);
+      
+      if (isFavorite) {
+        const result = await removeFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setFavoriteItems(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(item.id);
+            return newSet;
+          });
+          showToast('success', 'Article retiré des favoris');
+        }
+      } else {
+        const result = await addFavoriteMenuItem(item.id.toString());
+        if (result.success) {
+          setFavoriteItems(prev => new Set(prev).add(item.id));
+          showToast('success', 'Article ajouté aux favoris');
+        }
+      }
+    } catch (error) {
+      showToast('error', 'Erreur lors de la gestion des favoris');
     }
   };
 
@@ -147,11 +229,26 @@ export default function BusinessMenuScreen() {
         <View style={styles.menuItemInfo}>
           <View style={styles.menuItemHeader}>
             <Text style={styles.menuItemName}>{item.name}</Text>
-            {item.is_popular && (
-              <View style={styles.popularBadge}>
-                <Text style={styles.popularText}>Populaire</Text>
-              </View>
-            )}
+            <View style={styles.menuItemBadges}>
+              {item.is_popular && (
+                <View style={styles.popularBadge}>
+                  <Text style={styles.popularText}>Populaire</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.favoriteButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(item);
+                }}
+              >
+                <MaterialIcons 
+                  name={favoriteItems.has(item.id) ? "favorite" : "favorite-border"} 
+                  size={20} 
+                  color={favoriteItems.has(item.id) ? "#E31837" : "#666"} 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
           
           {item.description && (
@@ -166,10 +263,21 @@ export default function BusinessMenuScreen() {
             </Text>
             
             <TouchableOpacity
-              style={styles.viewDetailsButton}
-              onPress={() => handleMenuItemPress(item)}
+              style={[
+                styles.addToCartButton,
+                addingToCart === item.id && styles.addToCartButtonLoading
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleQuickAddToCart(item);
+              }}
+              disabled={addingToCart === item.id}
             >
-              <MaterialIcons name="visibility" size={20} color="#E31837" />
+              {addingToCart === item.id ? (
+                <MaterialIcons name="hourglass-empty" size={20} color="#E31837" />
+              ) : (
+                <MaterialIcons name="add-shopping-cart" size={20} color="#E31837" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -459,12 +567,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E31837',
   },
-  viewDetailsButton: {
+  addToCartButton: {
     borderWidth: 1,
     borderColor: '#E31837',
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'transparent',
+    marginLeft: 8,
+  },
+  addToCartButtonLoading: {
+    backgroundColor: '#E31837',
   },
   menuItemsLoading: {
     flex: 1,
@@ -527,5 +639,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#E31837',
     textAlign: 'center',
+  },
+  menuItemBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  favoriteButton: {
+    padding: 4,
   },
 }); 
