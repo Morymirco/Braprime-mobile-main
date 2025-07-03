@@ -3,31 +3,33 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     Dimensions,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ToastContainer from '../components/ToastContainer';
 import { useCart } from '../hooks/useCart';
 import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
+import { type OrderData, type PaymentMethod } from '../lib/services/OrderService';
 
 const { width } = Dimensions.get('window');
 
 export default function CheckoutScreen() {
+  console.log('🛒 CheckoutScreen: Component mounted');
+  
   const router = useRouter();
   const { user } = useAuth();
   const { cart, loading, error, convertToOrder, loadingStates } = useCart();
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money' | 'mtn_money'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money' | 'mtn_money' | 'card'>('cash');
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -37,13 +39,45 @@ export default function CheckoutScreen() {
     instructions: ''
   });
 
+  // Méthodes de paiement disponibles (adaptées au schéma)
+  const availablePaymentMethods: PaymentMethod[] = [
+    {
+      id: 1,
+      name: 'cash',
+      icon: '💵',
+      description: 'Paiement à la livraison',
+      is_available: true
+    },
+    {
+      id: 2,
+      name: 'orange_money',
+      icon: '🟠',
+      description: 'Orange Money',
+      is_available: true
+    },
+    {
+      id: 3,
+      name: 'mtn_money',
+      icon: '🟡',
+      description: 'MTN Money',
+      is_available: true
+    },
+    {
+      id: 4,
+      name: 'card',
+      icon: '💳',
+      description: 'Carte bancaire',
+      is_available: true
+    }
+  ];
+
   // Charger les données utilisateur et du panier
   useEffect(() => {
     if (user) {
       setFormData(prev => ({
         ...prev,
-        fullName: user.email?.split('@')[0] || '',
-        phone: '',
+        fullName: user.full_name || user.email?.split('@')[0] || '',
+        phone: user.phone || '',
       }));
     }
 
@@ -58,9 +92,9 @@ export default function CheckoutScreen() {
   }, [user, cart]);
 
   // Calculer les totaux
-  const cartTotal = cart?.total || 0;
-  const deliveryFee = deliveryMethod === 'delivery' ? 15000 : 0; // Augmenté pour correspondre au design web
-  const tax = Math.round(cartTotal * 0.18); // 18% comme dans le design web
+  const cartTotal = cart?.items?.reduce((total, item) => total + (item.price * item.quantity), 0) || 0;
+  const deliveryFee = deliveryMethod === 'delivery' ? 15000 : 0;
+  const tax = Math.round(cartTotal * 0.18); // 18% TVA
   const grandTotal = cartTotal + deliveryFee + tax;
 
   // Validation du formulaire
@@ -68,8 +102,13 @@ export default function CheckoutScreen() {
     if (!cart || cart.items.length === 0) return false;
     
     const requiredFields = [formData.fullName, formData.phone];
+    
     if (deliveryMethod === 'delivery') {
-      requiredFields.push(formData.address, formData.neighborhood);
+      // Valider les champs d'adresse manuels
+      const addressFields = [formData.address, formData.neighborhood];
+      if (!addressFields.every(field => field.trim() !== '')) {
+        return false;
+      }
     }
     
     return requiredFields.every(field => field.trim() !== '');
@@ -82,32 +121,31 @@ export default function CheckoutScreen() {
       return;
     }
 
-    try {
-      const fullAddress = deliveryMethod === 'delivery' 
-        ? `${formData.address}, ${formData.neighborhood}, Conakry`
-        : '';
+    if (!user?.id) {
+      showToast('error', 'Vous devez être connecté pour passer une commande.');
+      return;
+    }
 
-      const orderData = {
-        customer: {
-          fullName: formData.fullName,
-          phone: formData.phone,
-          email: user?.email,
-        },
-        delivery: {
-          method: deliveryMethod,
-          address: fullAddress,
-          landmark: formData.landmark,
-          instructions: formData.instructions,
-        },
-        payment: {
-          method: paymentMethod,
-        },
-        totals: {
-          subtotal: cartTotal,
-          deliveryFee,
-          tax,
-          total: grandTotal,
-        }
+    try {
+      // Préparer les données de commande selon le schéma de base de données
+      const orderData: OrderData = {
+        user_id: user.id,
+        business_id: cart?.business_id,
+        business_name: cart?.business_name || 'Commerce',
+        items: cart?.items || [],
+        status: 'pending',
+        total: cartTotal,
+        delivery_fee: deliveryFee,
+        tax,
+        grand_total: grandTotal,
+        delivery_method: deliveryMethod,
+        delivery_address: deliveryMethod === 'delivery' ? `${formData.address}, ${formData.neighborhood}` : undefined,
+        delivery_instructions: formData.instructions || undefined,
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+        // Coordonnées temporairement désactivées
+        pickup_coordinates: undefined,
+        delivery_coordinates: undefined,
       };
 
       const { success, orderId, error: orderError } = await convertToOrder(orderData);
@@ -115,20 +153,8 @@ export default function CheckoutScreen() {
       if (success && orderId) {
         showToast('success', `Commande #${orderId} créée avec succès !`);
         
-        Alert.alert(
-          'Commande confirmée !',
-          `Votre commande #${orderId} a été créée avec succès.`,
-          [
-            {
-              text: 'Voir mes commandes',
-              onPress: () => router.push('/orders')
-            },
-            {
-              text: 'Retour à l\'accueil',
-              onPress: () => router.push('/')
-            }
-          ]
-        );
+        // Rediriger vers la page de succès
+        router.push(`/order-success?orderId=${orderId}`);
       } else {
         showToast('error', orderError || 'Impossible de créer la commande. Veuillez réessayer.');
       }
@@ -322,38 +348,39 @@ export default function CheckoutScreen() {
               <Text style={styles.sectionTitle}>Adresse de livraison</Text>
             </View>
             <View style={styles.sectionContent}>
+              {/* Adresse manuelle temporaire */}
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Adresse *</Text>
+                <Text style={styles.inputLabel}>Adresse de livraison *</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.address}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-                  placeholder="Rue / Avenue / Boulevard"
+                  placeholder="Entrez votre adresse complète"
+                  multiline
+                  numberOfLines={2}
                 />
               </View>
               
-              <View style={styles.inputRow}>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Quartier *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.neighborhood}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, neighborhood: text }))}
-                    placeholder="Votre quartier"
-                  />
-                </View>
-                
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Point de repère</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.landmark}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, landmark: text }))}
-                    placeholder="Ex: Près de la station Total"
-                  />
-                </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Quartier *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.neighborhood}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, neighborhood: text }))}
+                  placeholder="Ex: Kaloum, Almamya, Ratoma..."
+                />
               </View>
-              
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Point de repère (optionnel)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.landmark}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, landmark: text }))}
+                  placeholder="Ex: Près de la station Total, bâtiment rouge..."
+                />
+              </View>
+
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Instructions de livraison</Text>
                 <TextInput
@@ -377,101 +404,41 @@ export default function CheckoutScreen() {
           </View>
           <View style={styles.sectionContent}>
             <View style={styles.paymentOptionsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.paymentOptionCard,
-                  paymentMethod === 'cash' && styles.paymentOptionCardActive
-                ]}
-                onPress={() => setPaymentMethod('cash')}
-              >
-                <View style={styles.paymentOptionHeader}>
-                  <View style={styles.paymentOptionIcon}>
-                    <Text style={styles.paymentEmoji}>💵</Text>
-                  </View>
-                  <View style={styles.paymentOptionRadio}>
-                    <View style={[
-                      styles.radioButton,
-                      paymentMethod === 'cash' && styles.radioButtonActive
-                    ]}>
-                      {paymentMethod === 'cash' && (
-                        <View style={styles.radioButtonInner} />
-                      )}
+              {availablePaymentMethods.map((method) => (
+                <TouchableOpacity
+                  key={method.id}
+                  style={[
+                    styles.paymentOptionCard,
+                    paymentMethod === method.name && styles.paymentOptionCardActive
+                  ]}
+                  onPress={() => setPaymentMethod(method.name as any)}
+                  disabled={!method.is_available}
+                >
+                  <View style={styles.paymentOptionHeader}>
+                    <View style={styles.paymentOptionIcon}>
+                      <Text style={styles.paymentEmoji}>{method.icon}</Text>
+                    </View>
+                    <View style={styles.paymentOptionRadio}>
+                      <View style={[
+                        styles.radioButton,
+                        paymentMethod === method.name && styles.radioButtonActive
+                      ]}>
+                        {paymentMethod === method.name && (
+                          <View style={styles.radioButtonInner} />
+                        )}
+                      </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.paymentOptionContent}>
-                  <Text style={[
-                    styles.paymentOptionTitle,
-                    paymentMethod === 'cash' && styles.paymentOptionTitleActive
-                  ]}>
-                    Paiement à la livraison
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.paymentOptionCard,
-                  paymentMethod === 'orange_money' && styles.paymentOptionCardActive
-                ]}
-                onPress={() => setPaymentMethod('orange_money')}
-              >
-                <View style={styles.paymentOptionHeader}>
-                  <View style={styles.paymentOptionIcon}>
-                    <Text style={styles.paymentEmoji}>🟠</Text>
-                  </View>
-                  <View style={styles.paymentOptionRadio}>
-                    <View style={[
-                      styles.radioButton,
-                      paymentMethod === 'orange_money' && styles.radioButtonActive
+                  <View style={styles.paymentOptionContent}>
+                    <Text style={[
+                      styles.paymentOptionTitle,
+                      paymentMethod === method.name && styles.paymentOptionTitleActive
                     ]}>
-                      {paymentMethod === 'orange_money' && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
+                      {method.description}
+                    </Text>
                   </View>
-                </View>
-                <View style={styles.paymentOptionContent}>
-                  <Text style={[
-                    styles.paymentOptionTitle,
-                    paymentMethod === 'orange_money' && styles.paymentOptionTitleActive
-                  ]}>
-                    Orange Money
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.paymentOptionCard,
-                  paymentMethod === 'mtn_money' && styles.paymentOptionCardActive
-                ]}
-                onPress={() => setPaymentMethod('mtn_money')}
-              >
-                <View style={styles.paymentOptionHeader}>
-                  <View style={styles.paymentOptionIcon}>
-                    <Text style={styles.paymentEmoji}>🟡</Text>
-                  </View>
-                  <View style={styles.paymentOptionRadio}>
-                    <View style={[
-                      styles.radioButton,
-                      paymentMethod === 'mtn_money' && styles.radioButtonActive
-                    ]}>
-                      {paymentMethod === 'mtn_money' && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.paymentOptionContent}>
-                  <Text style={[
-                    styles.paymentOptionTitle,
-                    paymentMethod === 'mtn_money' && styles.paymentOptionTitleActive
-                  ]}>
-                    MTN Money
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         </View>
@@ -535,7 +502,7 @@ export default function CheckoutScreen() {
               : 'Préparation estimée: 20-30 minutes'}
           </Text>
         </View>
-        
+
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[

@@ -349,15 +349,15 @@ export default function BusinessDetailScreen() {
       >
         {/* Image de couverture avec overlay et informations */}
         <View style={styles.coverContainer}>
-          <Image
-            source={{
-              uri: business.cover_image || business.logo || 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=400&q=80'
-            }}
-            style={styles.coverImage}
-            resizeMode="cover"
-          />
+        <Image
+          source={{
+            uri: business.cover_image || business.logo || 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=400&q=80'
+          }}
+          style={styles.coverImage}
+          resizeMode="cover"
+        />
           <View style={styles.coverOverlay} />
-          
+
           {/* Informations superposées */}
           <View style={styles.coverInfo}>
             <View style={styles.logoContainer}>
@@ -371,8 +371,8 @@ export default function BusinessDetailScreen() {
             </View>
             
             <View style={styles.businessInfo}>
-              <Text style={styles.businessName}>{business.name}</Text>
-              
+          <Text style={styles.businessName}>{business.name}</Text>
+          
               <View style={styles.businessMeta}>
                 {business.cuisine_type && (
                   <Text style={styles.cuisineType}>{business.cuisine_type}</Text>
@@ -506,11 +506,11 @@ export default function BusinessDetailScreen() {
                         <View style={styles.menuItemHeader}>
                           <Text style={styles.menuItemName}>{item.name}</Text>
                           <View style={styles.menuItemBadges}>
-                            {item.is_popular && (
-                              <View style={styles.popularBadge}>
-                                <Text style={styles.popularText}>Populaire</Text>
-                              </View>
-                            )}
+                          {item.is_popular && (
+                            <View style={styles.popularBadge}>
+                              <Text style={styles.popularText}>Populaire</Text>
+                            </View>
+                          )}
                             <TouchableOpacity
                               style={styles.favoriteButton}
                               onPress={(e) => {

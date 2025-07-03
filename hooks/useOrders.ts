@@ -1,105 +1,96 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/contexts/AuthContext';
-import { Order, OrderService } from '../lib/services/OrderService';
-import { useDataSync } from './useDataSync';
+import { orderService, type Order, type OrderData, type PaymentMethod } from '../lib/services/OrderService';
 
 interface UseOrdersReturn {
   orders: Order[];
   loading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-  getOrderById: (orderId: string) => Promise<{ order: Order | null; error: string | null }>;
-  cancelOrder: (orderId: string) => Promise<{ error: string | null }>;
-  rateOrder: (orderId: string, rating: number, review?: string) => Promise<{ success: boolean; error: string | null }>;
+  error: any;
+  createOrder: (orderData: OrderData) => Promise<{ success: boolean; orderId?: string; error?: any }>;
+  cancelOrder: (orderId: string) => Promise<{ success: boolean; error?: any }>;
+  rateOrder: (orderId: string, rating: number, review?: string) => Promise<{ success: boolean; error?: any }>;
+  updateOrderStatus: (orderId: string, status: Order['status']) => Promise<{ success: boolean; error?: any }>;
+  getPaymentMethods: () => Promise<{ methods: PaymentMethod[]; error?: any }>;
+  refreshOrders: () => Promise<void>;
+  getOrdersByStatus: (status: Order['status']) => Promise<{ orders: Order[]; error?: any }>;
 }
 
 export function useOrders(): UseOrdersReturn {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<any>(null);
 
-  // Système de synchronisation
-  const { registerSync, unregisterSync } = useDataSync({
-    enabled: true,
-    interval: 30000, // 30 secondes
-    retryAttempts: 3,
-    retryDelay: 5000,
-  });
-
-  const fetchOrders = useCallback(async () => {
-    if (!user?.id) {
+  // Charger les commandes au montage et quand l'utilisateur change
+  useEffect(() => {
+    if (user?.id) {
+      loadUserOrders();
+    } else {
       setOrders([]);
       setLoading(false);
-      return;
     }
+  }, [user?.id]);
+
+  const loadUserOrders = async () => {
+    if (!user?.id) return;
 
     try {
       setLoading(true);
       setError(null);
       
-      console.log('📋 Récupération des commandes...');
-      const { orders: ordersData, error: ordersError } = await OrderService.getUserOrders(user.id);
+      const { orders: userOrders, error: ordersError } = await orderService.getUserOrders(user.id);
       
       if (ordersError) {
         setError(ordersError);
-        console.error('❌ Erreur commandes:', ordersError);
-      } else {
-        setOrders(ordersData);
-        console.log('✅ Commandes récupérées:', ordersData.length);
+        return;
       }
+
+      setOrders(userOrders);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération des commandes';
-      setError(errorMessage);
-      console.error('❌ Erreur dans fetchOrders:', err);
+      console.error('❌ Erreur lors du chargement des commandes:', err);
+      setError(err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  };
 
-  const getOrderById = useCallback(async (orderId: string) => {
-    if (!user?.id) {
-      return { order: null, error: 'Utilisateur non connecté' };
-    }
-
+  const createOrder = async (orderData: OrderData): Promise<{ success: boolean; orderId?: string; error?: any }> => {
     try {
-      console.log('🔍 Récupération de la commande:', orderId);
-      const result = await OrderService.getOrderById(orderId);
+      setError(null);
       
-      if (result.order && result.order.user_id !== user.id) {
-        return { order: null, error: 'Accès non autorisé' };
+      const { orderId, error: createError } = await orderService.createOrder(orderData);
+      
+      if (createError) {
+        setError(createError);
+        return { success: false, error: createError };
       }
-      
-      return result;
+
+      if (orderId) {
+        // Recharger les commandes pour inclure la nouvelle
+        await loadUserOrders();
+        return { success: true, orderId };
+      }
+
+      return { success: false, error: 'Erreur lors de la création de la commande' };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération de la commande';
-      console.error('❌ Erreur dans getOrderById:', err);
-      return { order: null, error: errorMessage };
+      console.error('❌ Erreur lors de la création de la commande:', err);
+      setError(err);
+      return { success: false, error: err };
     }
-  }, [user?.id]);
+  };
 
-  const cancelOrder = useCallback(async (orderId: string) => {
-    if (!user?.id) {
-      return { error: 'Utilisateur non connecté' };
-    }
-
+  const cancelOrder = async (orderId: string): Promise<{ success: boolean; error?: any }> => {
     try {
-      console.log('❌ Annulation de la commande:', orderId);
+      setError(null);
       
-      // Vérifier que la commande appartient à l'utilisateur
-      const { order } = await OrderService.getOrderById(orderId);
-      if (!order || order.user_id !== user.id) {
-        return { error: 'Accès non autorisé' };
+      const { success, error: cancelError } = await orderService.cancelOrder(orderId);
+      
+      if (cancelError) {
+        setError(cancelError);
+        return { success: false, error: cancelError };
       }
 
-      // Vérifier que la commande peut être annulée
-      if (!['pending', 'confirmed'].includes(order.status)) {
-        return { error: 'Cette commande ne peut plus être annulée' };
-      }
-
-      const result = await OrderService.cancelOrder(orderId);
-      
-      if (!result.error) {
+      if (success) {
         // Mettre à jour la liste des commandes
         setOrders(prevOrders => 
           prevOrders.map(order => 
@@ -108,44 +99,29 @@ export function useOrders(): UseOrdersReturn {
               : order
           )
         );
-        console.log('✅ Commande annulée avec succès');
       }
-      
-      return result;
+
+      return { success };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'annulation';
-      console.error('❌ Erreur dans cancelOrder:', err);
-      return { error: errorMessage };
+      console.error('❌ Erreur lors de l\'annulation de la commande:', err);
+      setError(err);
+      return { success: false, error: err };
     }
-  }, [user?.id]);
+  };
 
-  const rateOrder = useCallback(async (orderId: string, rating: number, review?: string) => {
-    if (!user?.id) {
-      return { success: false, error: 'Utilisateur non connecté' };
-    }
-
-    if (rating < 1 || rating > 5) {
-      return { success: false, error: 'La note doit être entre 1 et 5' };
-    }
-
+  const rateOrder = async (orderId: string, rating: number, review?: string): Promise<{ success: boolean; error?: any }> => {
     try {
-      console.log('⭐ Notation de la commande:', orderId, rating);
+      setError(null);
       
-      // Vérifier que la commande appartient à l'utilisateur
-      const { order } = await OrderService.getOrderById(orderId);
-      if (!order || order.user_id !== user.id) {
-        return { success: false, error: 'Accès non autorisé' };
+      const { success, error: rateError } = await orderService.rateOrder(orderId, rating, review);
+      
+      if (rateError) {
+        setError(rateError);
+        return { success: false, error: rateError };
       }
 
-      // Vérifier que la commande est livrée
-      if (order.status !== 'delivered') {
-        return { success: false, error: 'Seules les commandes livrées peuvent être notées' };
-      }
-
-      const result = await OrderService.addCustomerReview(orderId, rating, review);
-      
-      if (!result.error) {
-        // Mettre à jour la liste des commandes
+      if (success) {
+        // Mettre à jour la commande dans la liste
         setOrders(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
@@ -153,40 +129,94 @@ export function useOrders(): UseOrdersReturn {
               : order
           )
         );
-        console.log('✅ Commande notée avec succès');
       }
-      
-      return { success: !result.error, error: result.error };
+
+      return { success };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la notation';
-      console.error('❌ Erreur dans rateOrder:', err);
-      return { success: false, error: errorMessage };
+      console.error('❌ Erreur lors de la notation de la commande:', err);
+      setError(err);
+      return { success: false, error: err };
     }
-  }, [user?.id]);
+  };
 
-  // Synchronisation automatique
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  // Enregistrement de la synchronisation des commandes
-  useEffect(() => {
-    if (user?.id) {
-      registerSync('orders-sync', fetchOrders, 'medium');
+  const updateOrderStatus = async (orderId: string, status: Order['status']): Promise<{ success: boolean; error?: any }> => {
+    try {
+      setError(null);
       
-      return () => {
-        unregisterSync('orders-sync');
-      };
+      const { success, error: updateError } = await orderService.updateOrderStatus(orderId, status);
+      
+      if (updateError) {
+        setError(updateError);
+        return { success: false, error: updateError };
+      }
+
+      if (success) {
+        // Mettre à jour la commande dans la liste
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, status }
+              : order
+          )
+        );
+      }
+
+      return { success };
+    } catch (err) {
+      console.error('❌ Erreur lors de la mise à jour du statut:', err);
+      setError(err);
+      return { success: false, error: err };
     }
-  }, [user?.id, registerSync, unregisterSync, fetchOrders]);
+  };
+
+  const getPaymentMethods = async (): Promise<{ methods: PaymentMethod[]; error?: any }> => {
+    try {
+      const { methods, error: methodsError } = await orderService.getPaymentMethods();
+      
+      if (methodsError) {
+        return { methods: [], error: methodsError };
+      }
+
+      return { methods };
+    } catch (err) {
+      console.error('❌ Erreur lors de la récupération des méthodes de paiement:', err);
+      return { methods: [], error: err };
+    }
+  };
+
+  const refreshOrders = async (): Promise<void> => {
+    await loadUserOrders();
+  };
+
+  const getOrdersByStatus = async (status: Order['status']): Promise<{ orders: Order[]; error?: any }> => {
+    if (!user?.id) {
+      return { orders: [], error: 'Utilisateur non connecté' };
+    }
+
+    try {
+      const { orders: statusOrders, error: statusError } = await orderService.getOrdersByStatus(user.id, status);
+      
+      if (statusError) {
+        return { orders: [], error: statusError };
+      }
+
+      return { orders: statusOrders };
+    } catch (err) {
+      console.error('❌ Erreur lors de la récupération des commandes par statut:', err);
+      return { orders: [], error: err };
+    }
+  };
 
   return {
     orders,
     loading,
     error,
-    refetch: fetchOrders,
-    getOrderById,
+    createOrder,
     cancelOrder,
     rateOrder,
+    updateOrderStatus,
+    getPaymentMethods,
+    refreshOrders,
+    getOrdersByStatus,
   };
 } 

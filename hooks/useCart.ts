@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/contexts/AuthContext';
 import { AddToCartItem, Cart, CartService } from '../lib/services/CartService';
+import { orderService, type OrderData } from '../lib/services/OrderService';
 import { useDataSync } from './useDataSync';
 
 interface UseCartReturn {
@@ -11,7 +12,7 @@ interface UseCartReturn {
   updateQuantity: (itemId: string, quantity: number) => Promise<{ success: boolean; error: string | null }>;
   removeFromCart: (itemId: string) => Promise<{ success: boolean; error: string | null }>;
   clearCart: () => Promise<{ success: boolean; error: string | null }>;
-  convertToOrder: (orderData: any) => Promise<{ success: boolean; orderId?: string; error?: string }>;
+  convertToOrder: (orderData: OrderData) => Promise<{ success: boolean; orderId?: string; error?: string }>;
   refetch: () => Promise<void>;
   isEmpty: () => boolean;
   getItemCount: () => number;
@@ -319,7 +320,7 @@ export function useCart(): UseCartReturn {
     }
   }, [user?.id, fetchCart, updateCartOptimistically]);
 
-  const convertToOrder = useCallback(async (orderData: any) => {
+  const convertToOrder = useCallback(async (orderData: OrderData) => {
     if (!user?.id) {
       return { success: false, error: 'Utilisateur non connecté' };
     }
@@ -327,18 +328,20 @@ export function useCart(): UseCartReturn {
     setLoadingStates(prev => ({ ...prev, convertToOrder: true }));
 
     try {
-      console.log('🛒 Conversion du panier en commande');
+      console.log('🛒 Conversion du panier en commande avec les données:', orderData);
       
-      const result = await CartService.convertCartToOrder(user.id, orderData);
+      // Utiliser le nouveau service de commandes
+      const { orderId, error: orderError } = await orderService.createOrder(orderData);
       
-      if (result.orderId) {
-        // Vider le panier local après conversion réussie
+      if (orderId) {
+        // Vider le panier après conversion réussie
+        await CartService.clearCart(user.id);
         setCart(null);
-        console.log('✅ Conversion réussie, panier vidé');
-        return { success: true, orderId: result.orderId };
+        console.log('✅ Conversion réussie, panier vidé, commande créée:', orderId);
+        return { success: true, orderId };
       } else {
-        console.error('❌ Erreur lors de la conversion:', result.error);
-        return { success: false, error: result.error || 'Erreur lors de la conversion' };
+        console.error('❌ Erreur lors de la création de la commande:', orderError);
+        return { success: false, error: orderError || 'Erreur lors de la création de la commande' };
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la conversion';

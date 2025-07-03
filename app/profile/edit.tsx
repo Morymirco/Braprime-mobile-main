@@ -2,27 +2,37 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActionSheetIOS, ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProfile } from '../../hooks/useProfile';
+import { useLanguage } from '../../lib/contexts/LanguageContext';
 
 export default function EditProfile() {
   const router = useRouter();
   const { profile, updateProfile, updateAvatar, loading, error } = useProfile();
+  const { t } = useLanguage();
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [bio, setBio] = useState('');
+  const [website, setWebsite] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [image, setImage] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Charger les données du profil
   useEffect(() => {
     if (profile) {
-      setName(profile.full_name || '');
-      setPhone(profile.phone || '');
+      setName(profile.name || '');
+      setPhone(profile.phone_number || '');
       setEmail(profile.email || '');
-      setImage(profile.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80');
+      setBio(profile.bio || '');
+      setWebsite(profile.website || '');
+      setCity(profile.city || '');
+      setPostalCode(profile.postal_code || '');
+      setImage(profile.profile_image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80');
     }
   }, [profile]);
 
@@ -98,37 +108,41 @@ export default function EditProfile() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom est obligatoire.');
+      Alert.alert(t('common.error'), t('edit.error.name'));
       return;
     }
 
     setSaving(true);
     try {
       const updates: any = {
-        full_name: name.trim(),
-        phone: phone.trim() || null,
+        name: name.trim(),
+        phone_number: phone.trim() || null,
+        bio: bio.trim() || null,
+        website: website.trim() || null,
+        city: city.trim() || null,
+        postal_code: postalCode.trim() || null,
       };
 
       // Si l'image a changé et n'est pas une URL externe, on pourrait l'uploader ici
-      if (image !== profile?.avatar_url && !image.startsWith('http')) {
+      if (image !== profile?.profile_image && !image.startsWith('http')) {
         // Ici vous pourriez uploader l'image vers Supabase Storage
         // Pour l'instant, on garde l'image locale
-        updates.avatar_url = image;
+        updates.profile_image = image;
       }
 
       const result = await updateProfile(updates);
       
       if (result.success) {
         Alert.alert(
-          'Succès',
-          'Profil mis à jour avec succès !',
+          t('common.success'),
+          t('edit.success'),
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {
-        Alert.alert('Erreur', result.error || 'Erreur lors de la mise à jour du profil.');
+        Alert.alert(t('common.error'), result.error || t('edit.error.update'));
       }
     } catch (err) {
-      Alert.alert('Erreur', 'Une erreur inattendue s\'est produite.');
+      Alert.alert(t('common.error'), t('edit.error.general'));
     } finally {
       setSaving(false);
     }
@@ -136,11 +150,11 @@ export default function EditProfile() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Supprimer le compte',
-      'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.',
+      t('edit.delete'),
+      t('edit.delete.confirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => {
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => {
           // Ici vous pourriez implémenter la suppression du compte
           Alert.alert('Fonctionnalité à venir', 'La suppression de compte sera bientôt disponible.');
         }},
@@ -153,7 +167,7 @@ export default function EditProfile() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#E41E31" />
-          <Text style={styles.loadingText}>Chargement du profil...</Text>
+          <Text style={styles.loadingText}>{t('edit.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -165,11 +179,11 @@ export default function EditProfile() {
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.title}>Modifier le profil</Text>
+        <Text style={styles.title}>{t('edit.title')}</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.avatarContainer}>
           <Image 
             source={{ uri: image }}
@@ -180,8 +194,11 @@ export default function EditProfile() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Informations personnelles</Text>
+
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Nom complet *</Text>
+            <Text style={styles.label}>{t('edit.name')} *</Text>
           <TextInput
             style={styles.input}
             value={name}
@@ -192,7 +209,7 @@ export default function EditProfile() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Numéro de téléphone</Text>
+            <Text style={styles.label}>{t('edit.phone')}</Text>
           <TextInput
             style={styles.input}
             value={phone}
@@ -204,7 +221,7 @@ export default function EditProfile() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Adresse e-mail</Text>
+            <Text style={styles.label}>{t('edit.email')}</Text>
           <TextInput
             style={[styles.input, styles.disabledInput]}
             value={email}
@@ -215,12 +232,69 @@ export default function EditProfile() {
             autoCapitalize="none"
           />
           <Text style={styles.disabledText}>
-            L'adresse e-mail ne peut pas être modifiée
+              {t('edit.email.disabled')}
           </Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Bio</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Parlez-nous un peu de vous..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Informations supplémentaires</Text>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Site web</Text>
+            <TextInput
+              style={styles.input}
+              value={website}
+              onChangeText={setWebsite}
+              placeholder="https://votre-site.com"
+              placeholderTextColor="#999"
+              keyboardType="url"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.row}>
+            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.label}>Ville</Text>
+              <TextInput
+                style={styles.input}
+                value={city}
+                onChangeText={setCity}
+                placeholder="Votre ville"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.label}>Code postal</Text>
+              <TextInput
+                style={styles.input}
+                value={postalCode}
+                onChangeText={setPostalCode}
+                placeholder="Code postal"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
         </View>
 
         <Text style={styles.disclaimer}>
-          Les communications et l'historique des transactions de BraPrime seront envoyés à l'adresse e-mail vérifiée
+          {t('edit.disclaimer')}
         </Text>
 
         <TouchableOpacity 
@@ -231,7 +305,7 @@ export default function EditProfile() {
           {saving ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
+            <Text style={styles.saveButtonText}>{t('edit.save')}</Text>
           )}
         </TouchableOpacity>
 
@@ -239,9 +313,9 @@ export default function EditProfile() {
           style={styles.deleteButton}
           onPress={handleDeleteAccount}
         >
-          <Text style={styles.deleteButtonText}>Supprimer le compte</Text>
+          <Text style={styles.deleteButtonText}>{t('edit.delete')}</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -312,6 +386,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
   inputContainer: {
     marginBottom: 20,
   },
@@ -330,6 +413,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e9ecef',
   },
+  textArea: {
+    minHeight: 80,
+    paddingTop: 16,
+  },
   disabledInput: {
     backgroundColor: '#f1f3f4',
     color: '#666',
@@ -339,6 +426,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 20,
   },
   disclaimer: {
     fontSize: 14,

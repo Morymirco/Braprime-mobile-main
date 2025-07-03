@@ -1,138 +1,162 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
+import { useAuth } from '../lib/contexts/AuthContext';
+import { supabase } from '../lib/supabase/config';
 
 export interface UserPreferences {
-  language: string;
+  language: 'fr' | 'en' | 'ar';
   theme: 'light' | 'dark' | 'auto';
   notifications: {
     push: boolean;
     email: boolean;
     sms: boolean;
   };
-  location: {
-    latitude?: number;
-    longitude?: number;
-    address?: string;
-    city?: string;
-  };
-  delivery: {
-    defaultAddress?: string;
-    preferredTime?: string;
-    instructions?: string;
-  };
   privacy: {
     shareLocation: boolean;
     shareProfile: boolean;
     analytics: boolean;
   };
+  mapProvider: 'google' | 'apple' | 'osm';
+  currency: 'GNF' | 'USD' | 'EUR';
+  timezone: string;
 }
 
-const DEFAULT_PREFERENCES: UserPreferences = {
+const defaultPreferences: UserPreferences = {
   language: 'fr',
-  theme: 'auto',
+  theme: 'light',
   notifications: {
     push: true,
     email: true,
     sms: false,
   },
-  location: {},
-  delivery: {},
   privacy: {
     shareLocation: true,
-    shareProfile: false,
+    shareProfile: true,
     analytics: true,
   },
+  mapProvider: 'google',
+  currency: 'GNF',
+  timezone: 'Africa/Conakry',
 };
 
-const PREFERENCES_KEY = '@braprime_user_preferences';
-
-export function useUserPreferences() {
-  const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
+export const useUserPreferences = () => {
+  const { user } = useAuth();
+  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadPreferences();
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const loadPreferences = async () => {
     try {
-      const stored = await AsyncStorage.getItem(PREFERENCES_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setPreferences({ ...DEFAULT_PREFERENCES, ...parsed });
+      setLoading(true);
+      setError(null);
+
+      if (!user) {
+        // Si pas d'utilisateur, charger les préférences locales
+        const localPrefs = await AsyncStorage.getItem('@user_preferences');
+        if (localPrefs) {
+          setPreferences({ ...defaultPreferences, ...JSON.parse(localPrefs) });
+        } else {
+          setPreferences(defaultPreferences);
+        }
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement des préférences:', error);
+
+      // Charger depuis Supabase
+      const { data: prefsData, error: prefsError } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', `user_preferences_${user.id}`)
+        .single();
+
+      if (prefsError && prefsError.code !== 'PGRST116') {
+        console.error('❌ Erreur lors du chargement des préférences:', prefsError);
+        setError(prefsError.message);
+      }
+
+      if (prefsData) {
+        const userPrefs = { ...defaultPreferences, ...prefsData.value };
+        setPreferences(userPrefs);
+        
+        // Sauvegarder aussi localement
+        await AsyncStorage.setItem('@user_preferences', JSON.stringify(userPrefs));
+      } else {
+        // Utiliser les préférences par défaut
+        setPreferences(defaultPreferences);
+        await AsyncStorage.setItem('@user_preferences', JSON.stringify(defaultPreferences));
+      }
+    } catch (err) {
+      console.error('❌ Erreur lors du chargement des préférences:', err);
+      setError('Erreur de connexion');
     } finally {
       setLoading(false);
     }
   };
 
-  const savePreferences = async (newPreferences: Partial<UserPreferences>) => {
+  const updatePreferences = async (updates: Partial<UserPreferences>) => {
     try {
-      const updated = { ...preferences, ...newPreferences };
-      await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(updated));
-      setPreferences(updated);
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde des préférences:', error);
-      return false;
+      setError(null);
+
+      const newPreferences = { ...preferences, ...updates };
+      setPreferences(newPreferences);
+
+      // Sauvegarder localement
+      await AsyncStorage.setItem('@user_preferences', JSON.stringify(newPreferences));
+
+      if (user) {
+        // Sauvegarder sur Supabase
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .upsert({
+            key: `user_preferences_${user.id}`,
+            value: newPreferences,
+            description: 'Préférences utilisateur'
+          });
+
+        if (updateError) {
+          console.error('❌ Erreur lors de la sauvegarde des préférences:', updateError);
+          setError(updateError.message);
+        }
+      }
+
+      console.log('✅ Préférences mises à jour:', newPreferences);
+    } catch (err) {
+      console.error('❌ Erreur lors de la mise à jour des préférences:', err);
+      setError('Erreur de connexion');
     }
-  };
-
-  const updateLanguage = async (language: string) => {
-    return await savePreferences({ language });
-  };
-
-  const updateTheme = async (theme: 'light' | 'dark' | 'auto') => {
-    return await savePreferences({ theme });
-  };
-
-  const updateNotifications = async (notifications: Partial<UserPreferences['notifications']>) => {
-    return await savePreferences({
-      notifications: { ...preferences.notifications, ...notifications }
-    });
-  };
-
-  const updateLocation = async (location: Partial<UserPreferences['location']>) => {
-    return await savePreferences({
-      location: { ...preferences.location, ...location }
-    });
-  };
-
-  const updateDelivery = async (delivery: Partial<UserPreferences['delivery']>) => {
-    return await savePreferences({
-      delivery: { ...preferences.delivery, ...delivery }
-    });
-  };
-
-  const updatePrivacy = async (privacy: Partial<UserPreferences['privacy']>) => {
-    return await savePreferences({
-      privacy: { ...preferences.privacy, ...privacy }
-    });
   };
 
   const resetPreferences = async () => {
     try {
-      await AsyncStorage.removeItem(PREFERENCES_KEY);
-      setPreferences(DEFAULT_PREFERENCES);
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la réinitialisation des préférences:', error);
-      return false;
+      setPreferences(defaultPreferences);
+      await AsyncStorage.setItem('@user_preferences', JSON.stringify(defaultPreferences));
+
+      if (user) {
+        const { error } = await supabase
+          .from('app_settings')
+          .delete()
+          .eq('key', `user_preferences_${user.id}`);
+
+        if (error) {
+          console.error('❌ Erreur lors de la réinitialisation des préférences:', error);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Erreur lors de la réinitialisation des préférences:', err);
     }
   };
+
+  // Charger les préférences au montage
+  useEffect(() => {
+    loadPreferences();
+  }, [user]);
 
   return {
     preferences,
     loading,
-    savePreferences,
-    updateLanguage,
-    updateTheme,
-    updateNotifications,
-    updateLocation,
-    updateDelivery,
-    updatePrivacy,
+    error,
+    updatePreferences,
     resetPreferences,
+    refetch: loadPreferences,
   };
-} 
+}; 

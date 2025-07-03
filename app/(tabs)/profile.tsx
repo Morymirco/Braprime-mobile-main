@@ -56,12 +56,14 @@ const MENU_ITEMS = [
     title: 'Conditions et services',
     icon: (props: IconProps) => <MaterialIcons name="description" {...props} />,
     showArrow: true,
+    onPress: (router: Router) => router.push('/terms'),
   },
   {
     id: 'privacy',
     title: 'Politique de confidentialité',
     icon: (props: IconProps) => <MaterialIcons name="lock-outline" {...props} />,
     showArrow: true,
+    onPress: (router: Router) => router.push('/privacy'),
   },
   {
     id: 'review',

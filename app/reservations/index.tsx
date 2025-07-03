@@ -144,7 +144,7 @@ export default function ReservationsScreen() {
               {formatDate(item.date)} à {formatTime(item.time)}
             </Text>
             <Text style={styles.partySize}>
-              {item.party_size} {item.party_size === 1 ? 'personne' : 'personnes'}
+                              {item.guests} {item.guests === 1 ? 'personne' : 'personnes'}
             </Text>
           </View>
         </View>
@@ -370,7 +370,7 @@ export default function ReservationsScreen() {
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Nombre de personnes:</Text>
                     <Text style={styles.infoValue}>
-                      {selectedReservation.party_size} {selectedReservation.party_size === 1 ? 'personne' : 'personnes'}
+                      {selectedReservation.guests} {selectedReservation.guests === 1 ? 'personne' : 'personnes'}
                     </Text>
                   </View>
                   {selectedReservation.special_requests && (

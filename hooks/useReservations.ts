@@ -29,7 +29,7 @@ export const useReservations = () => {
   };
 
   // Créer une nouvelle réservation
-  const createReservation = async (data: CreateReservationData): Promise<{ success: boolean; error?: string }> => {
+  const createReservation = async (data: CreateReservationData): Promise<{ success: boolean; error?: string; reservation?: Reservation }> => {
     try {
       const { data: reservation, error } = await ReservationService.create(data);
       
@@ -39,7 +39,7 @@ export const useReservations = () => {
 
       if (reservation) {
         setReservations(prev => [reservation, ...prev]);
-        return { success: true };
+        return { success: true, reservation };
       }
 
       return { success: false, error: 'Erreur lors de la création de la réservation' };

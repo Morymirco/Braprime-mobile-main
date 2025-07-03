@@ -33,7 +33,7 @@ export default function SplashScreen() {
   const handleLanguageSelect = (language: string) => {
     // TODO: Set language in storage
     console.log('🌍 Langue sélectionnée:', language);
-    router.replace('/select-location');
+    router.replace('/(tabs)');
   };
 
   return (

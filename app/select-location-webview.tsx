@@ -13,18 +13,26 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SimpleMap from '../components/SimpleMap';
+import MapWebView from '../components/MapWebView';
 import ToastContainer from '../components/ToastContainer';
 import { useToast } from '../hooks/useToast';
 import { locationService, type Place } from '../lib/services/LocationService';
 
 const { width, height } = Dimensions.get('window');
 
-export default function SelectLocationScreen() {
-  console.log('🗺️ SelectLocationScreen: Component mounted');
-  
+interface LocationParams {
+  onSelect?: (location: {
+    address: string;
+    latitude: number;
+    longitude: number;
+    neighborhood: string;
+    landmark?: string;
+  }) => void;
+}
+
+export default function SelectLocationWebViewScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<LocationParams>();
   const { showToast } = useToast();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +51,7 @@ export default function SelectLocationScreen() {
     longitude: -13.6785
   });
   
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Utiliser le service LocationService pour la recherche
   const searchPlaces = async (query: string) => {
@@ -107,15 +115,11 @@ export default function SelectLocationScreen() {
   };
 
   const handleMapLocationSelect = async (latitude: number, longitude: number) => {
-    console.log('🗺️ SelectLocationScreen: Map location selected:', { latitude, longitude });
-    
     try {
       // Utiliser le service pour le géocodage inverse
-      console.log('🗺️ SelectLocationScreen: Starting reverse geocoding...');
       const location = await locationService.reverseGeocode(latitude, longitude);
       
       if (location) {
-        console.log('🗺️ SelectLocationScreen: Reverse geocoding successful:', location);
         const finalLocation = {
           ...location,
           landmark: landmark
@@ -124,7 +128,6 @@ export default function SelectLocationScreen() {
         setSelectedLocation(finalLocation);
         showToast('success', 'Emplacement sélectionné sur la carte');
       } else {
-        console.log('🗺️ SelectLocationScreen: Reverse geocoding failed, creating manual location');
         // Si le géocodage échoue, créer une location manuelle
         const manualLocation = {
           address: `Adresse sélectionnée (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
@@ -137,7 +140,7 @@ export default function SelectLocationScreen() {
         showToast('success', 'Emplacement sélectionné sur la carte');
       }
     } catch (error) {
-      console.error('❌ SelectLocationScreen: Error during reverse geocoding:', error);
+      console.error('Erreur lors du géocodage inverse:', error);
       // Créer une location manuelle en cas d'erreur
       const manualLocation = {
         address: `Adresse sélectionnée (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
@@ -185,12 +188,8 @@ export default function SelectLocationScreen() {
         landmark: landmark.trim() || undefined
       };
 
-      // Check if we can go back, if not navigate to main app
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
+      // Retourner à la page précédente avec l'emplacement sélectionné
+      router.back();
       
       // Simuler le callback (dans une vraie app, vous utiliseriez un contexte ou une navigation avec params)
       if (params.onSelect) {
@@ -200,12 +199,7 @@ export default function SelectLocationScreen() {
   };
 
   const handleBackPress = () => {
-    // Check if we can go back, if not navigate to main app
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
+    router.back();
   };
 
   const renderSearchResult = ({ item }: { item: Place }) => (
@@ -267,14 +261,20 @@ export default function SelectLocationScreen() {
         </View>
       )}
 
-      {/* Carte interactive avec Google Maps */}
+      {/* Carte interactive avec WebView */}
       <View style={styles.mapContainer}>
-        <SimpleMap
+        <MapWebView
           latitude={mapCoordinates.latitude}
           longitude={mapCoordinates.longitude}
           onLocationSelect={handleMapLocationSelect}
           height={300}
         />
+        <View style={styles.mapInstructions}>
+          <MaterialIcons name="info" size={16} color="#666" />
+          <Text style={styles.mapInstructionsText}>
+            Cliquez sur la carte ou faites glisser le marqueur pour sélectionner un emplacement
+          </Text>
+        </View>
       </View>
 
       {/* Informations de l'emplacement sélectionné */}

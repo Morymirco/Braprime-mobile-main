@@ -113,23 +113,25 @@ export default function CreateReservationScreen() {
         business_name: selectedBusiness.name,
         date: date,
         time: time,
-        party_size: parseInt(partySize),
+        guests: parseInt(partySize),
         special_requests: specialRequests.trim() || undefined
       };
 
       const result = await createReservation(reservationData);
 
       if (result.success) {
-        Alert.alert(
-          'Succès',
-          'Votre réservation a été créée avec succès',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.push('/reservations')
-            }
-          ]
-        );
+        // Rediriger vers la page de succès avec les données de la réservation
+        router.push({
+          pathname: '/reservations/success',
+          params: {
+            business_name: selectedBusiness.name,
+            business_image: selectedBusiness.cover_image || selectedBusiness.logo,
+            date: date,
+            time: time,
+            guests: partySize,
+            reservation_id: result.reservation?.id || 'N/A'
+          }
+        });
       } else {
         Alert.alert('Erreur', result.error || 'Erreur lors de la création de la réservation');
       }

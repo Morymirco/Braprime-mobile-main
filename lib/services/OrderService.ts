@@ -1,12 +1,23 @@
 import { supabase } from '../supabase/config';
 
+// Types adaptés au schéma de base de données
+export interface CartItem {
+  id: string;
+  menu_item_id?: number;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  special_instructions?: string;
+}
+
 export interface Order {
   id: string;
   user_id: string;
-  business_id: number;
+  business_id?: number;
   business_name: string;
-  items: any[]; // JSONB des articles commandés
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  items: CartItem[];
+  status: 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
   tax: number;
@@ -14,7 +25,7 @@ export interface Order {
   delivery_method: 'delivery' | 'pickup';
   delivery_address?: string;
   delivery_instructions?: string;
-  payment_method: 'cash' | 'card' | 'mobile_money' | 'bank_transfer';
+  payment_method: 'cash' | 'orange_money' | 'mtn_money' | 'card';
   payment_status: 'pending' | 'paid' | 'failed';
   estimated_delivery?: string;
   actual_delivery?: string;
@@ -24,14 +35,22 @@ export interface Order {
   driver_location?: any;
   customer_rating?: number;
   customer_review?: string;
+  pickup_coordinates?: { latitude: number; longitude: number };
+  delivery_coordinates?: { latitude: number; longitude: number };
+  estimated_pickup_time?: string;
+  estimated_delivery_time?: string;
+  actual_pickup_time?: string;
+  actual_delivery_time?: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateOrderData {
-  business_id: number;
+export interface OrderData {
+  user_id: string;
+  business_id?: number;
   business_name: string;
-  items: any[];
+  items: CartItem[];
+  status: 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
   tax: number;
@@ -39,358 +58,320 @@ export interface CreateOrderData {
   delivery_method: 'delivery' | 'pickup';
   delivery_address?: string;
   delivery_instructions?: string;
-  payment_method: 'cash' | 'card' | 'mobile_money' | 'bank_transfer';
+  payment_method: 'cash' | 'orange_money' | 'mtn_money' | 'card';
+  payment_status: 'pending' | 'paid' | 'failed';
+  pickup_coordinates?: { latitude: number; longitude: number };
+  delivery_coordinates?: { latitude: number; longitude: number };
 }
 
-export interface UpdateOrderData {
-  status?: Order['status'];
-  payment_status?: Order['payment_status'];
-  delivery_address?: string;
-  delivery_instructions?: string;
-  customer_rating?: number;
-  customer_review?: string;
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  icon: string;
+  description?: string;
+  is_available: boolean;
 }
 
-export class OrderService {
-  // Récupérer les commandes d'un utilisateur
-  static async getUserOrders(userId: string): Promise<{ orders: Order[]; error: string | null }> {
+class OrderService {
+  // Récupérer toutes les commandes d'un utilisateur
+  async getUserOrders(userId: string): Promise<{ orders: Order[]; error: any }> {
     try {
-      console.log('📋 Récupération des commandes utilisateur:', userId);
-      
-      const { data, error } = await supabase
+      const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Erreur récupération commandes utilisateur:', error);
-        return { orders: [], error: error.message };
+        console.error('❌ Erreur lors de la récupération des commandes:', error);
+        return { orders: [], error };
       }
 
-      console.log('✅ Commandes utilisateur récupérées:', data?.length || 0);
-      return { orders: data || [], error: null };
+      return { orders: orders || [], error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des commandes:', error);
-      return { orders: [], error: 'Erreur lors de la récupération des commandes' };
+      return { orders: [], error };
     }
   }
 
   // Récupérer une commande spécifique
-  static async getOrderById(orderId: string): Promise<{ order: Order | null; error: string | null }> {
+  async getOrder(orderId: string): Promise<{ order: Order | null; error: any }> {
     try {
-      console.log('🔍 Récupération de la commande:', orderId);
-      
-      const { data, error } = await supabase
+      const { data: order, error } = await supabase
         .from('orders')
         .select('*')
         .eq('id', orderId)
         .single();
 
       if (error) {
-        console.error('❌ Erreur récupération commande:', error);
-        return { order: null, error: error.message };
+        console.error('❌ Erreur lors de la récupération de la commande:', error);
+        return { order: null, error };
       }
 
-      console.log('✅ Commande récupérée:', data);
-      return { order: data, error: null };
+      return { order, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la récupération de la commande:', error);
-      return { order: null, error: 'Erreur lors de la récupération de la commande' };
+      return { order: null, error };
     }
   }
 
   // Créer une nouvelle commande
-  static async createOrder(orderData: CreateOrderData): Promise<{ order: Order | null; error: string | null }> {
+  async createOrder(orderData: OrderData): Promise<{ orderId: string | null; error: any }> {
     try {
-      console.log('🛒 Création de commande:', orderData);
-      
-      const { data, error } = await supabase
+      console.log('🛒 Création de commande avec les données:', orderData);
+
+      // Préparer les données pour l'insertion
+      const orderToInsert = {
+        user_id: orderData.user_id,
+        business_id: orderData.business_id,
+        business_name: orderData.business_name,
+        items: orderData.items,
+        status: orderData.status,
+        total: orderData.total,
+        delivery_fee: orderData.delivery_fee,
+        tax: orderData.tax,
+        grand_total: orderData.grand_total,
+        delivery_method: orderData.delivery_method,
+        delivery_address: orderData.delivery_address,
+        delivery_instructions: orderData.delivery_instructions,
+        payment_method: orderData.payment_method,
+        payment_status: orderData.payment_status,
+        pickup_coordinates: orderData.pickup_coordinates,
+        delivery_coordinates: orderData.delivery_coordinates,
+      };
+
+      const { data: order, error } = await supabase
         .from('orders')
-        .insert(orderData)
-        .select()
+        .insert([orderToInsert])
+        .select('id')
         .single();
 
       if (error) {
-        console.error('❌ Erreur création commande:', error);
-        return { order: null, error: error.message };
+        console.error('❌ Erreur lors de la création de la commande:', error);
+        return { orderId: null, error };
       }
 
-      console.log('✅ Commande créée avec succès:', data);
-
-      // Créer une notification pour la nouvelle commande
-      await this.createOrderNotification(data, 'confirmed');
-
-      return { order: data, error: null };
+      console.log('✅ Commande créée avec succès:', order.id);
+      return { orderId: order.id, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la création de la commande:', error);
-      return { order: null, error: 'Erreur lors de la création de la commande' };
+      return { orderId: null, error };
     }
   }
 
-  // Mettre à jour une commande
-  static async updateOrder(orderId: string, updates: UpdateOrderData): Promise<{ order: Order | null; error: string | null }> {
+  // Mettre à jour le statut d'une commande
+  async updateOrderStatus(orderId: string, status: Order['status']): Promise<{ success: boolean; error: any }> {
     try {
-      console.log('🔄 Mise à jour de la commande:', orderId, updates);
-      
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('orders')
-        .update(updates)
-        .eq('id', orderId)
-        .select()
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('❌ Erreur lors de la mise à jour du statut:', error);
+        return { success: false, error };
+      }
+
+      // Ajouter une entrée dans l'historique des statuts
+      await this.addOrderStatusHistory(orderId, status);
+
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour du statut:', error);
+      return { success: false, error };
+    }
+  }
+
+  // Ajouter une entrée dans l'historique des statuts
+  async addOrderStatusHistory(orderId: string, status: string, description?: string): Promise<void> {
+    try {
+      await supabase
+        .from('order_status_history')
+        .insert([{
+          order_id: orderId,
+          status,
+          description,
+          created_at: new Date().toISOString()
+        }]);
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'ajout de l\'historique:', error);
+    }
+  }
+
+  // Récupérer les méthodes de paiement disponibles
+  async getPaymentMethods(): Promise<{ methods: PaymentMethod[]; error: any }> {
+    try {
+      const { data: methods, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .eq('is_available', true)
+        .order('id');
+
+      if (error) {
+        console.error('❌ Erreur lors de la récupération des méthodes de paiement:', error);
+        return { methods: [], error };
+      }
+
+      return { methods: methods || [], error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des méthodes de paiement:', error);
+      return { methods: [], error };
+    }
+  }
+
+  // Créer un paiement pour une commande
+  async createPayment(orderId: string, amount: number, method: string): Promise<{ paymentId: string | null; error: any }> {
+    try {
+      const { data: payment, error } = await supabase
+        .from('payments')
+        .insert([{
+          order_id: orderId,
+          amount,
+          method,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }])
+        .select('id')
         .single();
 
       if (error) {
-        console.error('❌ Erreur lors de la mise à jour de la commande:', error);
-        return { order: null, error: error.message };
+        console.error('❌ Erreur lors de la création du paiement:', error);
+        return { paymentId: null, error };
       }
 
-      console.log('✅ Commande mise à jour avec succès:', data);
-      return { order: data, error: null };
+      return { paymentId: payment.id, error: null };
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour de la commande:', error);
-      return { order: null, error: 'Erreur lors de la mise à jour de la commande' };
+      console.error('❌ Erreur lors de la création du paiement:', error);
+      return { paymentId: null, error };
+    }
+  }
+
+  // Mettre à jour le statut d'un paiement
+  async updatePaymentStatus(paymentId: string, status: 'pending' | 'paid' | 'failed', transactionId?: string): Promise<{ success: boolean; error: any }> {
+    try {
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (transactionId) {
+        updateData.transaction_id = transactionId;
+      }
+
+      const { error } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('id', paymentId);
+
+      if (error) {
+        console.error('❌ Erreur lors de la mise à jour du statut de paiement:', error);
+        return { success: false, error };
+      }
+
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour du statut de paiement:', error);
+      return { success: false, error };
     }
   }
 
   // Annuler une commande
-  static async cancelOrder(orderId: string): Promise<{ error: string | null }> {
+  async cancelOrder(orderId: string): Promise<{ success: boolean; error: any }> {
     try {
-      console.log('❌ Annulation de la commande:', orderId);
-      
       const { error } = await supabase
         .from('orders')
         .update({ 
-          status: 'cancelled', 
-          updated_at: new Date().toISOString() 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
         })
         .eq('id', orderId);
 
       if (error) {
-        console.error('❌ Erreur annulation commande:', error);
-        return { error: error.message };
+        console.error('❌ Erreur lors de l\'annulation de la commande:', error);
+        return { success: false, error };
       }
 
-      console.log('✅ Commande annulée avec succès');
-      return { error: null };
+      // Ajouter l'historique
+      await this.addOrderStatusHistory(orderId, 'cancelled', 'Commande annulée par l\'utilisateur');
+
+      return { success: true, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de l\'annulation de la commande:', error);
-      return { error: 'Erreur lors de l\'annulation de la commande' };
+      return { success: false, error };
     }
   }
 
   // Noter une commande
-  static async rateOrder(orderId: string, rating: number, review?: string): Promise<{ success: boolean; error: string | null }> {
+  async rateOrder(orderId: string, rating: number, review?: string): Promise<{ success: boolean; error: any }> {
     try {
-      console.log('⭐ Notation de la commande:', orderId, rating);
-      
+      if (rating < 1 || rating > 5) {
+        return { success: false, error: 'La note doit être entre 1 et 5' };
+      }
+
       const { error } = await supabase
         .from('orders')
         .update({ 
           customer_rating: rating,
           customer_review: review,
-          updated_at: new Date().toISOString() 
+          updated_at: new Date().toISOString()
         })
-        .eq('id', orderId)
-        .eq('status', 'delivered'); // Seulement les commandes livrées peuvent être notées
+        .eq('id', orderId);
 
       if (error) {
         console.error('❌ Erreur lors de la notation de la commande:', error);
-        return { success: false, error: error.message };
+        return { success: false, error };
       }
 
-      console.log('✅ Commande notée avec succès');
       return { success: true, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la notation de la commande:', error);
-      return { success: false, error: 'Erreur lors de la notation de la commande' };
+      return { success: false, error };
     }
   }
 
   // Récupérer les commandes par statut
-  static async getOrdersByStatus(status: Order['status']): Promise<{ orders: Order[]; error: string | null }> {
+  async getOrdersByStatus(userId: string, status: Order['status']): Promise<{ orders: Order[]; error: any }> {
     try {
-      console.log('📊 Récupération commandes par statut:', status);
-      
-      const { data, error } = await supabase
+      const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('user_id', userId)
         .eq('status', status)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Erreur récupération commandes par statut:', error);
-        return { orders: [], error: error.message };
+        console.error('❌ Erreur lors de la récupération des commandes par statut:', error);
+        return { orders: [], error };
       }
 
-      console.log('✅ Commandes par statut récupérées:', data?.length || 0);
-      return { orders: data || [], error: null };
+      return { orders: orders || [], error: null };
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des commandes:', error);
-      return { orders: [], error: 'Erreur lors de la récupération des commandes' };
+      console.error('❌ Erreur lors de la récupération des commandes par statut:', error);
+      return { orders: [], error };
     }
   }
 
-  // Récupérer les statistiques des commandes
-  static async getOrderStats(): Promise<{ stats: any; error: string | null }> {
+  // Récupérer l'historique des statuts d'une commande
+  async getOrderStatusHistory(orderId: string): Promise<{ history: any[]; error: any }> {
     try {
-      // Récupérer toutes les commandes de l'utilisateur
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select('*');
+      const { data: history, error } = await supabase
+        .from('order_status_history')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('❌ Erreur lors de la récupération des statistiques:', error);
-        return { stats: null, error: error.message };
+        console.error('❌ Erreur lors de la récupération de l\'historique:', error);
+        return { history: [], error };
       }
 
-      // Calculer les statistiques
-      const stats = {
-        total: orders?.length || 0,
-        totalSpent: orders?.reduce((sum, order) => sum + order.grand_total, 0) || 0,
-        pending: orders?.filter(order => order.status === 'pending').length || 0,
-        confirmed: orders?.filter(order => order.status === 'confirmed').length || 0,
-        preparing: orders?.filter(order => order.status === 'preparing').length || 0,
-        delivering: orders?.filter(order => order.status === 'picked_up').length || 0,
-        delivered: orders?.filter(order => order.status === 'delivered').length || 0,
-        cancelled: orders?.filter(order => order.status === 'cancelled').length || 0,
-        averageRating: orders?.filter(order => order.customer_rating)
-          .reduce((sum, order) => sum + order.customer_rating!, 0) / 
-          (orders?.filter(order => order.customer_rating).length || 1) || 0
-      };
-
-      return { stats, error: null };
+      return { history: history || [], error: null };
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des statistiques:', error);
-      return { stats: null, error: 'Erreur lors de la récupération des statistiques' };
+      console.error('❌ Erreur lors de la récupération de l\'historique:', error);
+      return { history: [], error };
     }
   }
+}
 
-  // Écouter les changements de commandes en temps réel
-  static subscribeToOrderChanges(orderId: string, callback: (order: Order) => void) {
-    console.log('👂 Abonnement aux changements de commande:', orderId);
-    
-    return supabase
-      .channel(`order-${orderId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-          filter: `id=eq.${orderId}`
-        },
-        (payload) => {
-          console.log('🔄 Changement de commande détecté:', payload.new);
-          callback(payload.new as Order);
-        }
-      )
-      .subscribe();
-  }
-
-  // Écouter les nouvelles commandes d'un commerce
-  static subscribeToBusinessOrders(businessId: number, callback: (order: Order) => void) {
-    console.log('👂 Abonnement aux nouvelles commandes commerce:', businessId);
-    
-    return supabase
-      .channel(`business-orders-${businessId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders',
-          filter: `business_id=eq.${businessId}`
-        },
-        (payload) => {
-          console.log('🆕 Nouvelle commande commerce détectée:', payload.new);
-          callback(payload.new as Order);
-        }
-      )
-      .subscribe();
-  }
-
-  // Écouter les changements de statut des commandes d'un utilisateur
-  static subscribeToUserOrderStatus(userId: string, callback: (order: Order) => void) {
-    console.log('👂 Abonnement aux changements de statut utilisateur:', userId);
-    
-    return supabase
-      .channel(`user-orders-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('🔄 Changement de statut utilisateur détecté:', payload.new);
-          callback(payload.new as Order);
-        }
-      )
-      .subscribe();
-  }
-
-  // Fonction helper pour créer des notifications selon le statut
-  private static async createOrderNotification(order: Order, status: string) {
-    try {
-      const statusMessages = {
-        'confirmed': {
-          title: 'Commande confirmée',
-          message: `Votre commande #${order.id.substring(0, 8)} a été confirmée par ${order.business_name}.`,
-          priority: 'medium' as const
-        },
-        'preparing': {
-          title: 'Commande en préparation',
-          message: `Votre commande #${order.id.substring(0, 8)} est en cours de préparation chez ${order.business_name}.`,
-          priority: 'medium' as const
-        },
-        'ready': {
-          title: 'Commande prête',
-          message: `Votre commande #${order.id.substring(0, 8)} est prête pour la livraison.`,
-          priority: 'high' as const
-        },
-        'picked_up': {
-          title: 'Commande en livraison',
-          message: `Votre commande #${order.id.substring(0, 8)} est en cours de livraison.`,
-          priority: 'high' as const
-        },
-        'delivered': {
-          title: 'Commande livrée',
-          message: `Votre commande #${order.id.substring(0, 8)} a été livrée. Bon appétit !`,
-          priority: 'medium' as const
-        },
-        'cancelled': {
-          title: 'Commande annulée',
-          message: `Votre commande #${order.id.substring(0, 8)} a été annulée.`,
-          priority: 'high' as const
-        }
-      };
-
-      const notificationData = statusMessages[status as keyof typeof statusMessages];
-      
-      if (notificationData) {
-        // Ici vous pouvez intégrer votre système de notifications
-        // Pour l'instant, on log juste la notification
-        console.log('📱 Notification créée:', notificationData);
-        
-        // Exemple d'intégration avec un service de notifications
-        // await NotificationService.create({
-        //   user_id: order.user_id,
-        //   type: 'order_status',
-        //   title: notificationData.title,
-        //   message: notificationData.message,
-        //   priority: notificationData.priority,
-        //   data: {
-        //     order_id: order.id,
-        //     business_name: order.business_name,
-        //     status: status
-        //   }
-        // });
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la création de la notification:', error);
-    }
-  }
-} 
+export const orderService = new OrderService();
+export default orderService; 

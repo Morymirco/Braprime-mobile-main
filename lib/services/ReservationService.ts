@@ -9,7 +9,7 @@ export interface Reservation {
   business_image?: string;
   date: string;
   time: string;
-  party_size: number;
+  guests: number;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   special_requests?: string;
   created_at: string;
@@ -22,7 +22,7 @@ export interface CreateReservationData {
   business_image?: string;
   date: string;
   time: string;
-  party_size: number;
+  guests: number;
   special_requests?: string;
 }
 
@@ -64,7 +64,7 @@ export class ReservationService {
         business_image: item.business?.cover_image || item.business?.logo || item.business_image,
         date: item.date,
         time: item.time,
-        party_size: item.party_size,
+        guests: item.guests,
         status: item.status,
         special_requests: item.special_requests,
         created_at: item.created_at,
@@ -100,7 +100,7 @@ export class ReservationService {
         business_name: data.business_name,
         date: data.date,
         time: data.time,
-        party_size: data.party_size,
+        guests: data.guests,
         status: 'pending' as const,
         special_requests: data.special_requests,
       };
