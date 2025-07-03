@@ -2,17 +2,17 @@ import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReservations } from '../../hooks/useReservations';
@@ -20,7 +20,7 @@ import { Reservation } from '../../lib/services/ReservationService';
 
 const { width } = Dimensions.get('window');
 
-type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
 
 // Helper function to get status badge color
 const getStatusColor = (status: ReservationStatus) => {
@@ -28,6 +28,7 @@ const getStatusColor = (status: ReservationStatus) => {
     case 'pending': return '#fff3cd';
     case 'confirmed': return '#d1ecf1';
     case 'cancelled': return '#f8d7da';
+    case 'no_show': return '#f8d7da';
     case 'completed': return '#d4edda';
     default: return '#f3f4f6';
   }
@@ -38,6 +39,7 @@ const getStatusTextColor = (status: ReservationStatus) => {
     case 'pending': return '#856404';
     case 'confirmed': return '#0c5460';
     case 'cancelled': return '#721c24';
+    case 'no_show': return '#721c24';
     case 'completed': return '#155724';
     default: return '#6b7280';
   }
@@ -49,6 +51,7 @@ const StatusIcon = ({ status, size = 16 }: { status: ReservationStatus; size?: n
     case 'pending': return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
     case 'confirmed': return <Ionicons name="checkmark-circle-outline" size={size} color={getStatusTextColor(status)} />;
     case 'cancelled': return <Ionicons name="close-circle" size={size} color={getStatusTextColor(status)} />;
+    case 'no_show': return <Ionicons name="close-circle" size={size} color={getStatusTextColor(status)} />;
     case 'completed': return <Ionicons name="checkmark-circle" size={size} color={getStatusTextColor(status)} />;
     default: return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
   }
@@ -154,6 +157,7 @@ export default function ReservationsScreen() {
             {item.status === 'pending' && 'En attente'}
             {item.status === 'confirmed' && 'Confirmée'}
             {item.status === 'cancelled' && 'Annulée'}
+            {item.status === 'no_show' && 'Non-présent'}
             {item.status === 'completed' && 'Terminée'}
           </Text>
         </View>
@@ -331,6 +335,7 @@ export default function ReservationsScreen() {
                         {selectedReservation.status === 'pending' && 'En attente'}
                         {selectedReservation.status === 'confirmed' && 'Confirmée'}
                         {selectedReservation.status === 'cancelled' && 'Annulée'}
+                        {selectedReservation.status === 'no_show' && 'Non-présent'}
                         {selectedReservation.status === 'completed' && 'Terminée'}
                       </Text>
                     </View>

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   date DATE NOT NULL,
   time TIME NOT NULL,
   party_size INTEGER NOT NULL CHECK (party_size > 0),
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed', 'no_show')),
   special_requests TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
