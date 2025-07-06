@@ -41,6 +41,10 @@ export interface Order {
   estimated_delivery_time?: string;
   actual_pickup_time?: string;
   actual_delivery_time?: string;
+  // Nouveaux champs pour la livraison programmée
+  preferred_delivery_time?: string;
+  delivery_type?: 'asap' | 'scheduled';
+  available_for_drivers?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +66,9 @@ export interface OrderData {
   payment_status: 'pending' | 'paid' | 'failed';
   pickup_coordinates?: { latitude: number; longitude: number };
   delivery_coordinates?: { latitude: number; longitude: number };
+  // Nouveaux champs pour la livraison programmée
+  preferred_delivery_time?: string;
+  delivery_type?: 'asap' | 'scheduled';
 }
 
 export interface PaymentMethod {
@@ -138,6 +145,9 @@ class OrderService {
         payment_status: orderData.payment_status,
         pickup_coordinates: orderData.pickup_coordinates,
         delivery_coordinates: orderData.delivery_coordinates,
+        // Nouveaux champs pour la livraison programmée
+        preferred_delivery_time: orderData.preferred_delivery_time,
+        delivery_type: orderData.delivery_type || 'asap',
       };
 
       const { data: order, error } = await supabase

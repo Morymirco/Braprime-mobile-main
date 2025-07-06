@@ -1,9 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -29,6 +31,10 @@ export default function CheckoutScreen() {
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
+  const [deliveryType, setDeliveryType] = useState<'asap' | 'scheduled'>('asap');
+  const [selectedDateTime, setSelectedDateTime] = useState<Date>(new Date());
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money' | 'mtn_money' | 'card'>('cash');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -71,25 +77,81 @@ export default function CheckoutScreen() {
     }
   ];
 
-  // Charger les données utilisateur et du panier
+  // Charger les données utilisateur et du panier (une seule fois au montage)
   useEffect(() => {
+    if (isInitialized) return; // Éviter les réinitialisations multiples
+    
     if (user) {
       setFormData(prev => ({
         ...prev,
-        fullName: user.full_name || user.email?.split('@')[0] || '',
-        phone: user.phone || '',
+        fullName: prev.fullName || user.full_name || user.email?.split('@')[0] || '',
+        phone: prev.phone || user.phone || '',
       }));
     }
 
     if (cart) {
       setFormData(prev => ({
         ...prev,
-        address: cart.delivery_address || '',
-        instructions: cart.delivery_instructions || '',
+        address: prev.address || cart.delivery_address || '',
+        instructions: prev.instructions || cart.delivery_instructions || '',
       }));
-      setDeliveryMethod(cart.delivery_method || 'delivery');
+      // Ne changer le mode de livraison que s'il n'est pas déjà défini
+      if (!deliveryMethod) {
+        setDeliveryMethod(cart.delivery_method || 'delivery');
+      }
     }
-  }, [user, cart]);
+    
+    setIsInitialized(true);
+  }, [user, cart, isInitialized]); // Inclure isInitialized pour éviter les boucles
+
+  // Gérer le changement de date/heure
+  const handleDateTimeChange = (event: any, selectedDate?: Date) => {
+    setShowDateTimePicker(false);
+    if (selectedDate) {
+      setSelectedDateTime(selectedDate);
+    }
+  };
+
+  // Formater la date pour l'affichage
+  const formatSelectedDateTime = () => {
+    if (deliveryType === 'asap') {
+      return 'Dès que possible';
+    }
+    
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (selectedDateTime.toDateString() === now.toDateString()) {
+      return `Aujourd'hui à ${selectedDateTime.toLocaleTimeString('fr-FR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })}`;
+    } else if (selectedDateTime.toDateString() === tomorrow.toDateString()) {
+      return `Demain à ${selectedDateTime.toLocaleTimeString('fr-FR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })}`;
+    } else {
+      return selectedDateTime.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  };
+
+  // Validation de la date sélectionnée
+  const isDateTimeValid = () => {
+    if (deliveryType === 'asap') return true;
+    
+    const now = new Date();
+    const minDateTime = new Date(now.getTime() + 30 * 60000); // 30 minutes minimum
+    
+    return selectedDateTime >= minDateTime;
+  };
 
   // Calculer les totaux
   const cartTotal = cart?.items?.reduce((total, item) => total + (item.price * item.quantity), 0) || 0;
@@ -111,12 +173,21 @@ export default function CheckoutScreen() {
       }
     }
     
+    // Valider la date/heure pour les livraisons programmées
+    if (deliveryType === 'scheduled' && !isDateTimeValid()) {
+      return false;
+    }
+    
     return requiredFields.every(field => field.trim() !== '');
   };
 
   // Gérer la soumission de la commande
   const handleSubmitOrder = async () => {
     if (!isFormValid()) {
+      if (deliveryType === 'scheduled' && !isDateTimeValid()) {
+        showToast('error', 'Veuillez sélectionner une date/heure valide (minimum 30 minutes).');
+        return;
+      }
       showToast('error', 'Veuillez remplir tous les champs obligatoires.');
       return;
     }
@@ -143,6 +214,9 @@ export default function CheckoutScreen() {
         delivery_instructions: formData.instructions || undefined,
         payment_method: paymentMethod,
         payment_status: 'pending',
+        // Nouveaux champs pour la livraison programmée
+        preferred_delivery_time: deliveryType === 'scheduled' ? selectedDateTime.toISOString() : undefined,
+        delivery_type: deliveryType,
         // Coordonnées temporairement désactivées
         pickup_coordinates: undefined,
         delivery_coordinates: undefined,
@@ -151,7 +225,11 @@ export default function CheckoutScreen() {
       const { success, orderId, error: orderError } = await convertToOrder(orderData);
       
       if (success && orderId) {
-        showToast('success', `Commande #${orderId} créée avec succès !`);
+        const deliveryMessage = deliveryType === 'scheduled' 
+          ? `Commande #${orderId} programmée pour ${formatSelectedDateTime()} !`
+          : `Commande #${orderId} créée avec succès !`;
+        
+        showToast('success', deliveryMessage);
         
         // Rediriger vers la page de succès
         router.push(`/order-success?orderId=${orderId}`);
@@ -308,6 +386,132 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
+        {/* Type de livraison - Seulement si livraison */}
+        {deliveryMethod === 'delivery' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="schedule" size={20} color="#E31837" />
+              <Text style={styles.sectionTitle}>Type de livraison</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <View style={styles.deliveryTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.deliveryTypeCard,
+                    deliveryType === 'asap' && styles.deliveryTypeCardActive
+                  ]}
+                  onPress={() => setDeliveryType('asap')}
+                >
+                  <View style={styles.deliveryTypeHeader}>
+                    <View style={styles.deliveryTypeIcon}>
+                      <MaterialIcons 
+                        name="flash-on" 
+                        size={24} 
+                        color={deliveryType === 'asap' ? '#E31837' : '#666'} 
+                      />
+                    </View>
+                    <View style={styles.deliveryTypeRadio}>
+                      <View style={[
+                        styles.radioButton,
+                        deliveryType === 'asap' && styles.radioButtonActive
+                      ]}>
+                        {deliveryType === 'asap' && (
+                          <View style={styles.radioButtonInner} />
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.deliveryTypeContent}>
+                    <Text style={[
+                      styles.deliveryTypeTitle,
+                      deliveryType === 'asap' && styles.deliveryTypeTitleActive
+                    ]}>
+                      Dès que possible
+                    </Text>
+                    <Text style={styles.deliveryTypeDescription}>
+                      Livraison en 30-60 minutes
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.deliveryTypeCard,
+                    deliveryType === 'scheduled' && styles.deliveryTypeCardActive
+                  ]}
+                  onPress={() => setDeliveryType('scheduled')}
+                >
+                  <View style={styles.deliveryTypeHeader}>
+                    <View style={styles.deliveryTypeIcon}>
+                      <MaterialIcons 
+                        name="event" 
+                        size={24} 
+                        color={deliveryType === 'scheduled' ? '#E31837' : '#666'} 
+                      />
+                    </View>
+                    <View style={styles.deliveryTypeRadio}>
+                      <View style={[
+                        styles.radioButton,
+                        deliveryType === 'scheduled' && styles.radioButtonActive
+                      ]}>
+                        {deliveryType === 'scheduled' && (
+                          <View style={styles.radioButtonInner} />
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.deliveryTypeContent}>
+                    <Text style={[
+                      styles.deliveryTypeTitle,
+                      deliveryType === 'scheduled' && styles.deliveryTypeTitleActive
+                    ]}>
+                      Livraison programmée
+                    </Text>
+                    <Text style={styles.deliveryTypeDescription}>
+                      Choisissez votre date et heure
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Sélection de date/heure pour les livraisons programmées */}
+              {deliveryType === 'scheduled' && (
+                <View style={styles.dateTimeSection}>
+                  <View style={styles.dateTimeHeader}>
+                    <MaterialIcons name="access-time" size={20} color="#E31837" />
+                    <Text style={styles.dateTimeTitle}>Date et heure de livraison</Text>
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.dateTimeButton,
+                      !isDateTimeValid() && styles.dateTimeButtonError
+                    ]}
+                    onPress={() => setShowDateTimePicker(true)}
+                  >
+                    <View style={styles.dateTimeButtonContent}>
+                      <MaterialIcons name="event" size={20} color="#666" />
+                      <Text style={[
+                        styles.dateTimeButtonText,
+                        !isDateTimeValid() && styles.dateTimeButtonTextError
+                      ]}>
+                        {formatSelectedDateTime()}
+                      </Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={20} color="#666" />
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {!isDateTimeValid() && deliveryType === 'scheduled' && (
+                    <Text style={styles.dateTimeErrorText}>
+                      Veuillez sélectionner une date/heure valide (minimum 30 minutes)
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Informations personnelles */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -446,6 +650,18 @@ export default function CheckoutScreen() {
         {/* Espace pour le bouton de confirmation */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* DateTimePicker Modal */}
+      {showDateTimePicker && (
+        <DateTimePicker
+          value={selectedDateTime}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDateTimeChange}
+          minimumDate={new Date(Date.now() + 30 * 60000)} // 30 minutes minimum
+          maximumDate={new Date(Date.now() + 7 * 24 * 60 * 60000)} // 7 jours maximum
+        />
+      )}
 
       {/* Résumé de commande fixe en bas */}
       <View style={styles.summaryContainer}>
@@ -891,5 +1107,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#E31837',
+  },
+  // Styles pour le type de livraison
+  deliveryTypeContainer: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  deliveryTypeCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  deliveryTypeCardActive: {
+    borderColor: '#E31837',
+    backgroundColor: '#fef2f2',
+  },
+  deliveryTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  deliveryTypeIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deliveryTypeRadio: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deliveryTypeContent: {
+    flex: 1,
+  },
+  deliveryTypeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  deliveryTypeTitleActive: {
+    color: '#E31837',
+  },
+  deliveryTypeDescription: {
+    fontSize: 14,
+    color: '#666',
+  },
+  // Styles pour la sélection de date/heure
+  dateTimeSection: {
+    marginTop: 16,
+  },
+  dateTimeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dateTimeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginLeft: 8,
+  },
+  dateTimeButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 16,
+  },
+  dateTimeButtonError: {
+    borderColor: '#E31837',
+    backgroundColor: '#fef2f2',
+  },
+  dateTimeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateTimeButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+    marginLeft: 12,
+    marginRight: 12,
+  },
+  dateTimeButtonTextError: {
+    color: '#E31837',
+  },
+  dateTimeErrorText: {
+    fontSize: 12,
+    color: '#E31837',
+    marginTop: 8,
+    marginLeft: 4,
   },
 }); 
