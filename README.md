@@ -43,11 +43,6 @@ Application mobile de livraison et services pour la Guinée, construite avec Rea
    
    L'application utilise l'authentification par email (Magic Link) via Supabase. Configurez :
    
-   ```bash
-   # Afficher les instructions de configuration
-   node scripts/setup-email-auth.js
-   ```
-   
    Puis suivez les étapes :
    1. Activez "Email Auth" dans Supabase Auth > Providers
    2. Configurez les templates d'email
@@ -163,12 +158,6 @@ import ProfileInfo from '../components/ProfileInfo';
 <ProfileInfo size="large" showEmail={true} />
 ```
 
-### Tests
-```bash
-# Tester le système de profil
-node scripts/test-profile-expo.js
-```
-
 Pour plus de détails, consultez [docs/PROFILE_SYSTEM.md](docs/PROFILE_SYSTEM.md).
 
 ## 🚀 Déploiement
@@ -193,10 +182,7 @@ Pour toute question ou problème :
 1. Vérifiez que le schéma de base de données est bien exécuté
 2. Assurez-vous que l'authentification par email est activée dans Supabase
 3. Vérifiez les logs de l'application
-4. Consultez les scripts de diagnostic :
-   - `node scripts/check-supabase-config.js`
-   - `node scripts/setup-email-auth.js`
-   - `node scripts/test-profile-expo.js`
+4. Consultez la documentation dans le dossier `docs/`
 
 ## 🔐 Sécurité
 

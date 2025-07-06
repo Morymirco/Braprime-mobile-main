@@ -18,6 +18,7 @@ import MenuItemDetail from '../../components/MenuItemDetail';
 import MenuSkeleton from '../../components/MenuSkeleton';
 import ToastContainer from '../../components/ToastContainer';
 import { useBusiness } from '../../hooks/useBusiness';
+import { useBusinessReview } from '../../hooks/useBusinessReview';
 import { useCart } from '../../hooks/useCart';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../hooks/useMenu';
@@ -38,6 +39,7 @@ export default function BusinessDetailScreen() {
   const { addToCart } = useCart();
   const { addFavoriteBusiness, removeFavoriteBusiness, isBusinessFavorite, addFavoriteMenuItem, removeFavoriteMenuItem, isMenuItemFavorite } = useFavorites();
   const { showToast } = useToast();
+  const { userReview, allReviews, stats: reviewStats, loading: reviewsLoading } = useBusinessReview(parseInt(businessId) || 0);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
@@ -229,6 +231,14 @@ export default function BusinessDetailScreen() {
     setModalVisible(false);
     setSelectedMenuItem(null);
   }, []);
+
+  const handleGiveReview = useCallback(() => {
+    router.push(`/business-review?id=${businessId}`);
+  }, [router, businessId]);
+
+  const handleViewAllReviews = useCallback(() => {
+    router.push(`/business-reviews?id=${businessId}`);
+  }, [router, businessId]);
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -608,6 +618,114 @@ export default function BusinessDetailScreen() {
             <MaterialIcons name="local-shipping" size={20} color="#666" />
             <Text style={styles.deliveryText}>Frais de livraison: {business.delivery_fee.toLocaleString()} GNF</Text>
           </View>
+        </View>
+
+        {/* Section des avis */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.sectionTitle}>Avis clients</Text>
+            <TouchableOpacity 
+              style={styles.giveReviewButton}
+              onPress={handleGiveReview}
+            >
+              <Text style={styles.giveReviewButtonText}>
+                {userReview ? 'Modifier mon avis' : 'Donner un avis'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {reviewsLoading ? (
+            <View style={styles.reviewsLoadingContainer}>
+              <Text style={styles.reviewsLoadingText}>Chargement des avis...</Text>
+            </View>
+          ) : reviewStats ? (
+            <View style={styles.reviewsStatsContainer}>
+              <View style={styles.reviewsStatsRow}>
+                <View style={styles.reviewStatItem}>
+                  <Text style={styles.reviewStatValue}>{reviewStats.averageRating.toFixed(1)}</Text>
+                  <View style={styles.reviewStarsRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <MaterialIcons
+                        key={star}
+                        name={reviewStats.averageRating >= star ? "star" : "star-border"}
+                        size={16}
+                        color={reviewStats.averageRating >= star ? "#f59e0b" : "#d1d5db"}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.reviewStatLabel}>Note moyenne</Text>
+                </View>
+                <View style={styles.reviewStatItem}>
+                  <Text style={styles.reviewStatValue}>{reviewStats.totalReviews}</Text>
+                  <Text style={styles.reviewStatLabel}>Avis total</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {allReviews.length > 0 ? (
+            <View style={styles.reviewsListContainer}>
+              {allReviews.slice(0, 3).map((review) => (
+                <View key={review.id} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.reviewUserInfo}>
+                      <View style={styles.reviewUserAvatar}>
+                        <Text style={styles.reviewUserInitial}>
+                          {review.user_name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.reviewUserDetails}>
+                        <Text style={styles.reviewUserName}>{review.user_name}</Text>
+                        <Text style={styles.reviewDate}>
+                          {new Date(review.created_at).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.reviewRatingContainer}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <MaterialIcons
+                          key={star}
+                          name={review.rating >= star ? "star" : "star-border"}
+                          size={16}
+                          color={review.rating >= star ? "#f59e0b" : "#d1d5db"}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  
+                  {review.comment && (
+                    <Text style={styles.reviewComment} numberOfLines={3}>
+                      {review.comment}
+                    </Text>
+                  )}
+                </View>
+              ))}
+              
+              {allReviews.length > 3 && (
+                <TouchableOpacity 
+                  style={styles.viewAllReviewsButton}
+                  onPress={handleViewAllReviews}
+                >
+                  <Text style={styles.viewAllReviewsButtonText}>
+                    Voir tous les avis ({allReviews.length})
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={20} color="#E31837" />
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <View style={styles.noReviewsContainer}>
+              <MaterialIcons name="rate-review" size={48} color="#CCC" />
+              <Text style={styles.noReviewsTitle}>Aucun avis pour le moment</Text>
+              <Text style={styles.noReviewsText}>
+                Soyez le premier à donner votre avis sur ce commerce !
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Espace en bas pour éviter que le contenu soit caché */}
@@ -1001,5 +1119,144 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     padding: 8,
+  },
+  reviewsSection: {
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  giveReviewButton: {
+    backgroundColor: '#E31837',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  giveReviewButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reviewsLoadingContainer: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  reviewsLoadingText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  reviewsStatsContainer: {
+    marginBottom: 12,
+  },
+  reviewsStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewStatItem: {
+    alignItems: 'center',
+  },
+  reviewStatValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  reviewStatLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  reviewsListContainer: {
+    paddingBottom: 16,
+  },
+  reviewCard: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    marginBottom: 12,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  reviewUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewUserAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  reviewUserInitial: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  reviewUserDetails: {
+    flexDirection: 'column',
+  },
+  reviewUserName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  reviewRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: '#666',
+  },
+  viewAllReviewsButton: {
+    backgroundColor: '#E31837',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewAllReviewsButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  noReviewsContainer: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  noReviewsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noReviewsText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
 }); 

@@ -47,12 +47,7 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": "AIzaSyAaZ74jJVrh-FTSerYhYWzJ6Jxif8L18pM"
-        }
-      ]
+
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,19 +2,20 @@ import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ReservationsSkeleton from '../../components/ReservationsSkeleton';
 import { useReservations } from '../../hooks/useReservations';
 import { Reservation } from '../../lib/services/ReservationService';
 
@@ -209,9 +210,7 @@ export default function ReservationsScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Mes Réservations</Text>
         </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement des réservations...</Text>
-        </View>
+        <ReservationsSkeleton count={5} />
       </SafeAreaView>
     );
   }

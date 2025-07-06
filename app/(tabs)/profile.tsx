@@ -3,6 +3,7 @@ import { Router, useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ProfileSkeleton from '../../components/ProfileSkeleton';
 import { useProfile } from '../../hooks/useProfile';
 import { useAuth } from '../../lib/contexts/AuthContext';
 
@@ -70,7 +71,7 @@ const MENU_ITEMS = [
     title: 'Donner un avis',
     icon: (props: IconProps) => <MaterialIcons name="thumb-up-off-alt" {...props} />,
     showArrow: true,
-    arrowIcon: 'chevron-right' as const,
+    onPress: (router: Router) => router.push('/app-review'),
   },
 ];
 
@@ -114,9 +115,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement du profil...</Text>
-        </View>
+        <ProfileSkeleton />
       </SafeAreaView>
     );
   }

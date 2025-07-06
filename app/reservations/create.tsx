@@ -34,6 +34,10 @@ export default function CreateReservationScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(true);
   const [isLoadingBusinessTypes, setIsLoadingBusinessTypes] = useState(true);
+  
+  // Date and Time picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Charger les restaurants et types au montage du composant
   useEffect(() => {
@@ -79,6 +83,69 @@ export default function CreateReservationScreen() {
     setSelectedBusinessType(businessType);
   };
 
+  // Generate available dates (next 30 days)
+  const generateAvailableDates = () => {
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push({
+        value: date.toISOString().split('T')[0],
+        label: formatDisplayDate(date.toISOString().split('T')[0])
+      });
+    }
+    
+    return dates;
+  };
+
+  // Generate available times (6 AM to 11 PM, 15-minute intervals)
+  const generateAvailableTimes = () => {
+    const times = [];
+    
+    for (let hour = 6; hour < 23; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        times.push({
+          value: timeString,
+          label: timeString
+        });
+      }
+    }
+    
+    return times;
+  };
+
+  const handleDateSelect = (selectedDate: string) => {
+    setDate(selectedDate);
+    setShowDatePicker(false);
+  };
+
+  const handleTimeSelect = (selectedTime: string) => {
+    setTime(selectedTime);
+    setShowTimePicker(false);
+  };
+
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
+  };
+
+  const showTimePickerModal = () => {
+    setShowTimePicker(true);
+  };
+
+  // Helper function to format date for display
+  const formatDisplayDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   // Filtrer les restaurants par type sélectionné
   const filteredBusinesses = selectedBusinessType 
     ? businesses.filter(business => business.business_type_id === selectedBusinessType.id)
@@ -91,12 +158,27 @@ export default function CreateReservationScreen() {
     }
 
     if (!date.trim()) {
-      Alert.alert('Erreur', 'Veuillez saisir une date');
+      Alert.alert('Erreur', 'Veuillez sélectionner une date');
       return;
     }
 
     if (!time.trim()) {
-      Alert.alert('Erreur', 'Veuillez saisir une heure');
+      Alert.alert('Erreur', 'Veuillez sélectionner une heure');
+      return;
+    }
+
+    // Validate date is not in the past
+    const selectedDateTime = new Date(`${date}T${time}`);
+    const now = new Date();
+    if (selectedDateTime <= now) {
+      Alert.alert('Erreur', 'La date et l\'heure de réservation doivent être dans le futur');
+      return;
+    }
+
+    // Validate time is within reasonable hours (6 AM to 11 PM)
+    const hours = selectedDateTime.getHours();
+    if (hours < 6 || hours >= 23) {
+      Alert.alert('Erreur', 'Les réservations sont possibles entre 6h00 et 23h00');
       return;
     }
 
@@ -225,21 +307,37 @@ export default function CreateReservationScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Date et heure</Text>
           
-          <TextInput
-            style={styles.input}
-            placeholder="Date (YYYY-MM-DD)"
-            value={date}
-            onChangeText={setDate}
-            keyboardType="numeric"
-          />
+          <TouchableOpacity 
+            style={[styles.dateTimeSelector, !date && styles.dateTimeSelectorEmpty]}
+            onPress={showDatePickerModal}
+          >
+            <View style={styles.dateTimeContent}>
+              <Ionicons name="calendar-outline" size={20} color={date ? "#E31837" : "#999"} />
+              <View style={styles.dateTimeTextContainer}>
+                <Text style={styles.dateTimeLabel}>Date</Text>
+                <Text style={[styles.dateTimeValue, !date && styles.dateTimeValueEmpty]}>
+                  {date ? formatDisplayDate(date) : 'Sélectionner une date'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Heure (HH:MM)"
-            value={time}
-            onChangeText={setTime}
-            keyboardType="numeric"
-          />
+          <TouchableOpacity 
+            style={[styles.dateTimeSelector, !time && styles.dateTimeSelectorEmpty]}
+            onPress={showTimePickerModal}
+          >
+            <View style={styles.dateTimeContent}>
+              <Ionicons name="time-outline" size={20} color={time ? "#E31837" : "#999"} />
+              <View style={styles.dateTimeTextContainer}>
+                <Text style={styles.dateTimeLabel}>Heure</Text>
+                <Text style={[styles.dateTimeValue, !time && styles.dateTimeValueEmpty]}>
+                  {time ? time : 'Sélectionner une heure'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
         </View>
 
         {/* Party Size */}
@@ -368,6 +466,80 @@ export default function CreateReservationScreen() {
           )}
         </SafeAreaView>
       </Modal>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="black" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Sélectionner une date</Text>
+          </View>
+
+          <FlatList
+            data={generateAvailableDates()}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.dateTimeItem}
+                onPress={() => handleDateSelect(item.value)}
+              >
+                <Text style={styles.dateTimeItemText}>{item.label}</Text>
+                {date === item.value && (
+                  <Ionicons name="checkmark" size={20} color="#E31837" />
+                )}
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.value}
+            style={styles.dateTimeList}
+            showsVerticalScrollIndicator={false}
+          />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Time Picker Modal */}
+      <Modal
+        visible={showTimePicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity 
+              onPress={() => setShowTimePicker(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="black" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Sélectionner une heure</Text>
+          </View>
+
+          <FlatList
+            data={generateAvailableTimes()}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.dateTimeItem}
+                onPress={() => handleTimeSelect(item.value)}
+              >
+                <Text style={styles.dateTimeItemText}>{item.label}</Text>
+                {time === item.value && (
+                  <Ionicons name="checkmark" size={20} color="#E31837" />
+                )}
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.value}
+            style={styles.dateTimeList}
+            showsVerticalScrollIndicator={false}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -416,6 +588,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     marginBottom: 8,
+  },
+  dateTimeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+  },
+  dateTimeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dateTimeTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  dateTimeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  dateTimeValue: {
+    fontSize: 16,
+    color: '#1a1a1a',
+    fontWeight: '500',
+  },
+  dateTimeSelectorEmpty: {
+    borderColor: '#d1d5db',
+    backgroundColor: '#f9fafb',
+  },
+  dateTimeValueEmpty: {
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  dateTimeList: {
+    flex: 1,
+  },
+  dateTimeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+  },
+  dateTimeItemText: {
+    fontSize: 16,
+    color: '#1a1a1a',
+    fontWeight: '500',
   },
   textArea: {
     height: 100,

@@ -84,10 +84,10 @@ export default function HomeScreen() {
       {/* Address Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.addressLabel}>Address</Text>
+          <Text style={styles.addressLabel}>Adresse</Text>
           <TouchableOpacity style={styles.addressButton}>
-            <Text style={styles.addressText}>Conakry, Conakry, Guinea</Text>
-            <MaterialIcons name="keyboard-arrow-down" size={24} color="#000" />
+            <Text style={styles.addressText}>Conakry, Conakry, Guinée</Text>
+            {/* Icône de flèche conservée pour la cohérence visuelle, mais aucun menu de sélection de lieu */}
           </TouchableOpacity>
         </View>
       </View>
@@ -206,6 +206,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },

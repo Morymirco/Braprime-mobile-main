@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   icon: {
     width: 64,
     height: 64,
-    borderRadius: 8,
+    borderRadius: 32,
     backgroundColor: '#E5E7EB',
     marginBottom: 8,
   },

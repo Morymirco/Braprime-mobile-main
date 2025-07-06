@@ -17,7 +17,7 @@ export interface Order {
   business_id?: number;
   business_name: string;
   items: CartItem[];
-  status: 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
   tax: number;
@@ -50,7 +50,7 @@ export interface OrderData {
   business_id?: number;
   business_name: string;
   items: CartItem[];
-  status: 'pending' | 'confirmed' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
   tax: number;

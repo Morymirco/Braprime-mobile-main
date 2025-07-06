@@ -2,17 +2,18 @@ import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import OrdersPageSkeleton from '../../components/OrdersPageSkeleton';
@@ -106,6 +107,20 @@ const formatDate = (date: Date) => {
     month: 'short',
     year: 'numeric'
   });
+};
+
+// Helper function to get status text (harmonisé avec le site web)
+const getStatusText = (status: OrderStatus) => {
+  switch (status) {
+    case 'pending': return 'En attente';
+    case 'confirmed': return 'Confirmée';
+    case 'preparing': return 'En préparation';
+    case 'ready': return 'Prête';
+    case 'picked_up': return 'En route';
+    case 'delivered': return 'Livrée';
+    case 'cancelled': return 'Annulée';
+    default: return status;
+  }
 };
 
 export default function OrdersScreen() {
@@ -250,6 +265,22 @@ export default function OrdersScreen() {
     router.back();
   };
 
+  // Fonction pour appeler le chauffeur
+  const handleCallDriver = useCallback(async (phoneNumber: string) => {
+    try {
+      const url = `tel:${phoneNumber}`;
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ouvrir l\'application téléphone');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible d\'appeler le chauffeur');
+    }
+  }, []);
+
   const renderOrderItem = ({ item }: { item: LocalOrder }) => (
     <TouchableOpacity 
       style={styles.orderCard}
@@ -264,13 +295,7 @@ export default function OrdersScreen() {
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <StatusIcon status={item.status} />
           <Text style={[styles.statusText, { color: getStatusTextColor(item.status) }]}>
-            {item.status === 'pending' && 'En attente'}
-            {item.status === 'confirmed' && 'Confirmée'}
-            {item.status === 'preparing' && 'En préparation'}
-            {item.status === 'ready' && 'Prête'}
-            {item.status === 'picked_up' && 'En livraison'}
-            {item.status === 'delivered' && 'Livrée'}
-            {item.status === 'cancelled' && 'Annulée'}
+            {getStatusText(item.status)}
           </Text>
         </View>
       </View>
@@ -371,7 +396,12 @@ export default function OrdersScreen() {
             />
           </View>
           
-          <View style={styles.filterContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterScrollContent}
+          >
             <TouchableOpacity 
               style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
               onPress={() => setFilter('all')}
@@ -389,6 +419,30 @@ export default function OrdersScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity 
+              style={[styles.filterButton, filter === 'preparing' && styles.filterButtonActive]}
+              onPress={() => setFilter('preparing')}
+            >
+              <Text style={[styles.filterText, filter === 'preparing' && styles.filterTextActive]}>
+                En préparation
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, filter === 'ready' && styles.filterButtonActive]}
+              onPress={() => setFilter('ready')}
+            >
+              <Text style={[styles.filterText, filter === 'ready' && styles.filterTextActive]}>
+                Prêtes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, filter === 'picked_up' && styles.filterButtonActive]}
+              onPress={() => setFilter('picked_up')}
+            >
+              <Text style={[styles.filterText, filter === 'picked_up' && styles.filterTextActive]}>
+                En route
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
               style={[styles.filterButton, filter === 'delivered' && styles.filterButtonActive]}
               onPress={() => setFilter('delivered')}
             >
@@ -396,7 +450,7 @@ export default function OrdersScreen() {
                 Livrées
               </Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         {/* Tabs */}
@@ -475,13 +529,7 @@ export default function OrdersScreen() {
                     <StatusIcon status={selectedOrder.status} size={24} />
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) }]}>
                       <Text style={[styles.statusText, { color: getStatusTextColor(selectedOrder.status) }]}>
-                        {selectedOrder.status === 'pending' && 'En attente'}
-                        {selectedOrder.status === 'confirmed' && 'Confirmée'}
-                        {selectedOrder.status === 'preparing' && 'En préparation'}
-                        {selectedOrder.status === 'ready' && 'Prête'}
-                        {selectedOrder.status === 'picked_up' && 'En livraison'}
-                        {selectedOrder.status === 'delivered' && 'Livrée'}
-                        {selectedOrder.status === 'cancelled' && 'Annulée'}
+                        {getStatusText(selectedOrder.status)}
                       </Text>
                     </View>
                   </View>
@@ -534,9 +582,18 @@ export default function OrdersScreen() {
                     </Text>
                   )}
                   {selectedOrder.driverPhone && (
-                    <Text style={styles.infoText}>
-                      <Text style={styles.infoLabel}>Téléphone livreur:</Text> {selectedOrder.driverPhone}
-                    </Text>
+                    <>
+                      <Text style={styles.infoText}>
+                        <Text style={styles.infoLabel}>Téléphone livreur:</Text> {selectedOrder.driverPhone}
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.callDriverButton}
+                        onPress={() => handleCallDriver(selectedOrder.driverPhone!)}
+                      >
+                        <Ionicons name="call" size={16} color="#fff" />
+                        <Text style={styles.callDriverButtonText}>Appeler le chauffeur</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </View>
@@ -774,17 +831,20 @@ const styles = StyleSheet.create({
     height: 40,
     fontSize: 16,
   },
-  filterContainer: {
-    flexDirection: 'row',
+  filterScroll: {
+    marginBottom: 12,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 16,
     gap: 8,
   },
   filterButton: {
-    flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
     backgroundColor: '#f3f4f6',
     alignItems: 'center',
+    minWidth: 80,
   },
   filterButtonActive: {
     backgroundColor: '#E31837',
@@ -1108,5 +1168,21 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
     marginTop: 8,
+  },
+  callDriverButton: {
+    backgroundColor: '#E31837',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  callDriverButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 
