@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Toast as ToastType } from '../hooks/useToast';
 
@@ -9,8 +9,9 @@ interface ToastProps {
 }
 
 export default function Toast({ toast, onHide }: ToastProps) {
-  const translateY = new Animated.Value(-100);
-  const opacity = new Animated.Value(0);
+  const translateY = useRef(new Animated.Value(-100)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const autoHideTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Animate in
@@ -26,9 +27,28 @@ export default function Toast({ toast, onHide }: ToastProps) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    // Auto-hide after duration
+    if (toast.duration && toast.duration > 0) {
+      autoHideTimeout.current = setTimeout(() => {
+        handleHide();
+      }, toast.duration);
+    }
+
+    return () => {
+      if (autoHideTimeout.current) {
+        clearTimeout(autoHideTimeout.current);
+      }
+    };
+  }, [toast.duration]);
 
   const handleHide = () => {
+    // Clear auto-hide timeout if it exists
+    if (autoHideTimeout.current) {
+      clearTimeout(autoHideTimeout.current);
+      autoHideTimeout.current = null;
+    }
+
     // Animate out
     Animated.parallel([
       Animated.timing(translateY, {

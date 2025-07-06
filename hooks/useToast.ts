@@ -23,14 +23,14 @@ export function useToast(): UseToastReturn {
     const id = Math.random().toString(36).substring(2, 15);
     const newToast: Toast = { id, type, message, duration };
 
-    setToasts(prev => [...prev, newToast]);
+    setToasts(prev => {
+      // Limiter le nombre de toasts affichés simultanément
+      const maxToasts = 3;
+      const updatedToasts = [...prev, newToast];
+      return updatedToasts.slice(-maxToasts);
+    });
 
-    // Auto-hide after duration
-    if (duration > 0) {
-      setTimeout(() => {
-        hideToast(id);
-      }, duration);
-    }
+    console.log(`🍞 Toast affiché: ${type} - ${message}`);
   }, []);
 
   const hideToast = useCallback((id: string) => {
