@@ -1,10 +1,11 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessTypesGrid from '../../components/BusinessTypesGrid';
 import BusinessTypesSkeleton from '../../components/BusinessTypesSkeleton';
 import { useBusinessTypes } from '../../hooks/useBusinessTypes';
+import { useNotifications } from '../../hooks/useNotifications';
 import { BusinessType } from '../../lib/services/BusinessTypeService';
 
 const { width } = Dimensions.get('window');
@@ -34,6 +35,7 @@ const BANNERS = [
 
 export default function HomeScreen() {
   const { businessTypes, loading, error } = useBusinessTypes();
+  const { unreadCount } = useNotifications();
   const router = useRouter();
 
   // Fonction pour formater le nom du type de commerce
@@ -79,6 +81,10 @@ export default function HomeScreen() {
     }
   };
 
+  const handleNotificationsPress = () => {
+    router.push('/notifications');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Address Header */}
@@ -87,9 +93,21 @@ export default function HomeScreen() {
           <Text style={styles.addressLabel}>Adresse</Text>
           <TouchableOpacity style={styles.addressButton}>
             <Text style={styles.addressText}>Conakry, Conakry, Guinée</Text>
-            {/* Icône de flèche conservée pour la cohérence visuelle, mais aucun menu de sélection de lieu */}
           </TouchableOpacity>
         </View>
+        <TouchableOpacity 
+          style={styles.notificationButton}
+          onPress={handleNotificationsPress}
+        >
+          <Ionicons name="notifications" size={24} color="#000" />
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -349,6 +367,22 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#E31837',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  notificationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationBadge: {
+    backgroundColor: '#E31837',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginLeft: 4,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });
