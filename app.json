@@ -2,7 +2,7 @@
   "expo": {
     "name": "prime",
     "slug": "prime",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "braprime",
@@ -46,8 +46,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ],
-
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -55,9 +54,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e4b4a45c-0b43-46a6-971a-249c27800163"
+        "projectId": "522b43a4-b382-4fb2-9f80-a0c36e266f53"
       }
     },
-    "owner": "bratech"
+    "owner": "morykoulibaly"
   }
 }

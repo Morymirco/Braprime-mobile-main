@@ -19,7 +19,7 @@
     "@supabase/supabase-js": "^2.50.0",
     "ajv": "^8.17.1",
     "ajv-keywords": "^5.1.0",
-    "expo": "53.0.17",
+    "expo": "53.0.19",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.5",
     "expo-font": "~13.3.1",
