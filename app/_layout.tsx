@@ -21,8 +21,8 @@ export default function RootLayout() {
             <Stack.Screen name="payment" options={{ headerShown: false }} />
             <Stack.Screen name="map" options={{ headerShown: false }} />
             <Stack.Screen name="reservations" options={{ headerShown: false }} />
-            <Stack.Screen name="google-maps-test" options={{ headerShown: false }} />
-            <Stack.Screen name="places-selection" options={{ headerShown: false }} />
+            {/* <Stack.Screen name="google-maps-test" options={{ headerShown: false }} /> */}
+            {/* <Stack.Screen name="places-selection" options={{ headerShown: false }} /> */}
           </Stack>
           <ToastContainer />
         </SessionPersistenceProvider>
