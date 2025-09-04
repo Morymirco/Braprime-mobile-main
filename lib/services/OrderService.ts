@@ -1,6 +1,10 @@
 import { supabase } from '../supabase/config';
 
 // Types adaptés au schéma de base de données
+// 
+// IMPORTANT: Ce service gère uniquement les commandes normales (nourriture/restaurant)
+// Les commandes de packages/colis sont gérées par le service PackageOrderService
+// La séparation est maintenant automatique au niveau du service
 export interface CartItem {
   id: string;
   menu_item_id?: number;
@@ -15,12 +19,12 @@ export interface Order {
   id: string;
   user_id: string;
   business_id?: number;
-  business_name: string;
-  items: CartItem[];
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  // business_name n'existe pas dans le schéma mobile
+  // items n'existe pas dans le schéma mobile (table séparée order_items)
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
-  tax: number;
+  service_fee: number; // Renommé de 'tax' vers 'service_fee'
   grand_total: number;
   delivery_method: 'delivery' | 'pickup';
   delivery_address?: string;
@@ -30,21 +34,41 @@ export interface Order {
   estimated_delivery?: string;
   actual_delivery?: string;
   driver_id?: string;
-  driver_name?: string;
-  driver_phone?: string;
-  driver_location?: any;
   customer_rating?: number;
   customer_review?: string;
   pickup_coordinates?: { latitude: number; longitude: number };
   delivery_coordinates?: { latitude: number; longitude: number };
-  estimated_pickup_time?: string;
-  estimated_delivery_time?: string;
-  actual_pickup_time?: string;
-  actual_delivery_time?: string;
-  // Nouveaux champs pour la livraison programmée
+  
+  // Champs de livraison programmée
   preferred_delivery_time?: string;
   delivery_type?: 'asap' | 'scheduled';
+  scheduled_delivery_window_start?: string;
+  scheduled_delivery_window_end?: string;
+  
+  // Point de repère et zone
+  landmark?: string;
+  zone?: string;
+  commune?: string;
+  quartier?: string;
+  
+  // Coordonnées GPS
+  delivery_latitude?: number;
+  delivery_longitude?: number;
+  delivery_formatted_address?: string;
+  pickup_latitude?: number;
+  pickup_longitude?: number;
+  pickup_formatted_address?: string;
+  
+  // Autres champs
+  order_number?: string;
+  verification_code?: string;
+  assigned_at?: string;
+  delivery_group_id?: string;
+  transaction_id?: string;
+  is_grouped_delivery?: boolean;
+  group_sequence?: number;
   available_for_drivers?: boolean;
+  
   created_at: string;
   updated_at: string;
 }
@@ -52,23 +76,56 @@ export interface Order {
 export interface OrderData {
   user_id: string;
   business_id?: number;
-  business_name: string;
-  items: CartItem[];
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  // business_name n'existe pas dans le schéma mobile
+  // items n'existe pas dans le schéma mobile (table séparée order_items)
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
   total: number;
   delivery_fee: number;
-  tax: number;
+  service_fee: number; // Renommé de 'tax' vers 'service_fee' pour correspondre au schéma
   grand_total: number;
   delivery_method: 'delivery' | 'pickup';
+  
+  // Adresse de livraison
   delivery_address?: string;
   delivery_instructions?: string;
-  payment_method: 'cash' | 'orange_money' | 'mtn_money' | 'card';
-  payment_status: 'pending' | 'paid' | 'failed';
+  landmark?: string; // Point de repère
+  
+  // Coordonnées GPS
+  delivery_latitude?: number;
+  delivery_longitude?: number;
+  delivery_formatted_address?: string;
+  pickup_latitude?: number;
+  pickup_longitude?: number;
+  pickup_formatted_address?: string;
+  
+  // Coordonnées JSONB
   pickup_coordinates?: { latitude: number; longitude: number };
   delivery_coordinates?: { latitude: number; longitude: number };
-  // Nouveaux champs pour la livraison programmée
-  preferred_delivery_time?: string;
+  
+  // Zone géographique
+  zone?: string;
+  commune?: string;
+  quartier?: string;
+  
+  payment_method: 'cash' | 'orange_money' | 'mtn_money' | 'card';
+  payment_status: 'pending' | 'paid' | 'failed';
+  
+  // Type de livraison
   delivery_type?: 'asap' | 'scheduled';
+  scheduled_delivery_window_start?: string;
+  scheduled_delivery_window_end?: string;
+  preferred_delivery_time?: string;
+  
+  // Champs optionnels selon le schéma mobile
+  estimated_delivery?: string;
+  actual_delivery?: string; // ✅ Existe dans le schéma
+  driver_id?: string;
+  customer_rating?: number;
+  customer_review?: string;
+  
+  // Champs qui n'existent pas dans le schéma mobile (à supprimer)
+  // business_name, items, driver_name, driver_phone, driver_location,
+  // estimated_pickup_time, estimated_delivery_time, actual_pickup_time, actual_delivery_time
 }
 
 export interface PaymentMethod {
@@ -80,12 +137,46 @@ export interface PaymentMethod {
 }
 
 class OrderService {
-  // Récupérer toutes les commandes d'un utilisateur
+  // Générer un numéro de commande unique
+  private async generateOrderNumber(): Promise<string> {
+    try {
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substr(2, 5);
+      return `ORDER-${timestamp}-${random}`.toUpperCase();
+    } catch (error) {
+      console.error('❌ Erreur lors de la génération du numéro de commande:', error);
+      // Fallback avec timestamp
+      return `ORDER-${Date.now()}`;
+    }
+  }
+
+  // Récupérer toutes les commandes d'un utilisateur avec leurs items (excluant les packages/colis)
   async getUserOrders(userId: string): Promise<{ orders: Order[]; error: any }> {
     try {
+      console.log('🔍 DEBUG - getUserOrders appelé pour userId:', userId);
+      
+      // Récupérer les commandes avec leurs items
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          *,
+          order_items (
+            id,
+            menu_item_id,
+            name,
+            price,
+            quantity,
+            special_instructions,
+            menu_item:menu_items (
+              id,
+              name,
+              description,
+              price,
+              image,
+              is_popular
+            )
+          )
+        `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -94,19 +185,92 @@ class OrderService {
         return { orders: [], error };
       }
 
-      return { orders: orders || [], error: null };
+      // Récupérer les IDs des commandes de colis pour les exclure
+      const { data: packageOrderIds, error: packageError } = await supabase
+        .from('package_orders')
+        .select('order_id')
+        .not('order_id', 'is', null);
+
+      if (packageError) {
+        console.error('❌ Erreur lors de la récupération des IDs de colis:', packageError);
+      }
+
+      // Filtrer les commandes pour exclure les commandes de colis
+      const packageOrderIdSet = new Set(packageOrderIds?.map(p => p.order_id) || []);
+      const filteredOrders = (orders || []).filter(order => !packageOrderIdSet.has(order.id));
+
+      console.log('🔍 DEBUG - Requête Supabase exécutée');
+      console.log('🔍 DEBUG - Erreur Supabase:', error);
+      console.log('🔍 DEBUG - Données brutes reçues:', orders);
+      console.log('🔍 DEBUG - Nombre de commandes brutes:', orders?.length || 0);
+      console.log('🔍 DEBUG - Nombre de commandes après filtrage des colis:', filteredOrders.length);
+
+      // Transformer les données pour inclure les items dans un format compatible
+      const ordersWithItems = filteredOrders.map(order => ({
+        ...order,
+        items: (order.order_items || []).map(item => ({
+          id: item.id,
+          name: item.name || item.menu_item?.name || 'Article inconnu',
+          price: item.price || item.menu_item?.price || 0,
+          quantity: item.quantity,
+          specialInstructions: item.special_instructions,
+          image: item.menu_item?.image
+        }))
+      }));
+
+      console.log('🔍 DEBUG - Commandes transformées:', ordersWithItems);
+      console.log('🔍 DEBUG - Nombre de commandes transformées:', ordersWithItems.length);
+      console.log('🔍 DEBUG - Premier ordre transformé:', ordersWithItems[0]);
+
+      console.log('✅ Commandes récupérées avec items:', ordersWithItems.length);
+      return { orders: ordersWithItems, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des commandes:', error);
       return { orders: [], error };
     }
   }
 
-  // Récupérer une commande spécifique
+  // Récupérer une commande spécifique avec ses items (excluant les packages/colis)
   async getOrder(orderId: string): Promise<{ order: Order | null; error: any }> {
     try {
+      // Vérifier d'abord que ce n'est pas une commande de colis
+      const { data: packageOrder, error: packageError } = await supabase
+        .from('package_orders')
+        .select('order_id')
+        .eq('order_id', orderId)
+        .single();
+
+      if (packageError && packageError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('❌ Erreur lors de la vérification des packages:', packageError);
+      }
+
+      // Si c'est une commande de colis, retourner null
+      if (packageOrder) {
+        console.log('🔍 DEBUG - Commande exclue (package/colis):', orderId);
+        return { order: null, error: 'Commande de colis non autorisée' };
+      }
+
       const { data: order, error } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          *,
+          order_items (
+            id,
+            menu_item_id,
+            name,
+            price,
+            quantity,
+            special_instructions,
+            menu_item:menu_items (
+              id,
+              name,
+              description,
+              price,
+              image,
+              is_popular
+            )
+          )
+        `)
         .eq('id', orderId)
         .single();
 
@@ -115,41 +279,145 @@ class OrderService {
         return { order: null, error };
       }
 
-      return { order, error: null };
+      // Transformer les données pour inclure les items
+      if (order) {
+        const orderWithItems = {
+          ...order,
+          items: (order.order_items || []).map(item => ({
+            id: item.id,
+            name: item.name || item.menu_item?.name || 'Article inconnu',
+            price: item.price || item.menu_item?.price || 0,
+            quantity: item.quantity,
+            specialInstructions: item.special_instructions,
+            image: item.menu_item?.image
+          }))
+        };
+
+        console.log('✅ Commande récupérée avec items:', orderWithItems.id);
+        return { order: orderWithItems, error: null };
+      }
+
+      return { order: null, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la récupération de la commande:', error);
       return { order: null, error };
     }
   }
 
+  // Récupérer uniquement les items d'une commande
+  async getOrderItems(orderId: string): Promise<{ items: any[]; error: any }> {
+    try {
+      const { data: orderItems, error } = await supabase
+        .from('order_items')
+        .select(`
+          id,
+          menu_item_id,
+          name,
+          price,
+          quantity,
+          special_instructions,
+          menu_item:menu_items (
+            id,
+            name,
+            description,
+            price,
+            image,
+            is_popular
+          )
+        `)
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('❌ Erreur lors de la récupération des items de commande:', error);
+        return { items: [], error };
+      }
+
+      // Transformer les données
+      const items = (orderItems || []).map(item => ({
+        id: item.id,
+        name: item.name || item.menu_item?.name || 'Article inconnu',
+        price: item.price || item.menu_item?.price || 0,
+        quantity: item.quantity,
+        specialInstructions: item.special_instructions,
+        image: item.menu_item?.image
+      }));
+
+      console.log('✅ Items de commande récupérés:', items.length);
+      return { items, error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des items de commande:', error);
+      return { items: [], error };
+    }
+  }
+
   // Créer une nouvelle commande
-  async createOrder(orderData: OrderData): Promise<{ orderId: string | null; error: any }> {
+  async createOrder(orderData: OrderData, cart?: any): Promise<{ orderId: string | null; error: any }> {
     try {
       console.log('🛒 Création de commande avec les données:', orderData);
 
-      // Préparer les données pour l'insertion
+      // Générer un numéro de commande unique
+      const orderNumber = await this.generateOrderNumber();
+
+      // Préparer les données pour l'insertion (adapté au schéma mobile)
       const orderToInsert = {
         user_id: orderData.user_id,
         business_id: orderData.business_id,
-        business_name: orderData.business_name,
-        items: orderData.items,
+        // business_name n'existe pas dans le schéma mobile
+        // items n'existe pas dans le schéma mobile (table séparée order_items)
         status: orderData.status,
         total: orderData.total,
         delivery_fee: orderData.delivery_fee,
-        tax: orderData.tax,
+        service_fee: orderData.service_fee, // Renommé de 'tax' vers 'service_fee'
         grand_total: orderData.grand_total,
         delivery_method: orderData.delivery_method,
+        
+        // Adresse de livraison
         delivery_address: orderData.delivery_address,
         delivery_instructions: orderData.delivery_instructions,
-        payment_method: orderData.payment_method,
-        payment_status: orderData.payment_status,
+        landmark: orderData.landmark,
+        
+        // Coordonnées GPS
+        delivery_latitude: orderData.delivery_latitude,
+        delivery_longitude: orderData.delivery_longitude,
+        delivery_formatted_address: orderData.delivery_formatted_address,
+        pickup_latitude: orderData.pickup_latitude,
+        pickup_longitude: orderData.pickup_longitude,
+        pickup_formatted_address: orderData.pickup_formatted_address,
+        
+        // Coordonnées JSONB
         pickup_coordinates: orderData.pickup_coordinates,
         delivery_coordinates: orderData.delivery_coordinates,
-        // Nouveaux champs pour la livraison programmée
+        
+        // Zone géographique
+        zone: orderData.zone,
+        commune: orderData.commune,
+        quartier: orderData.quartier,
+        
+        payment_method: orderData.payment_method,
+        payment_status: orderData.payment_status,
+        
+        // Type de livraison
+        delivery_type: orderData.delivery_type,
+        scheduled_delivery_window_start: orderData.scheduled_delivery_window_start,
+        scheduled_delivery_window_end: orderData.scheduled_delivery_window_end,
         preferred_delivery_time: orderData.preferred_delivery_time,
-        delivery_type: orderData.delivery_type || 'asap',
+        
+        // Champs optionnels selon le schéma mobile
+        estimated_delivery: orderData.estimated_delivery,
+        actual_delivery: orderData.actual_delivery,
+        driver_id: orderData.driver_id,
+        customer_rating: orderData.customer_rating,
+        customer_review: orderData.customer_review,
+        
+        // Champs qui n'existent pas dans le schéma mobile (supprimés)
+        // business_name, items, driver_name, driver_phone, driver_location,
+        // estimated_pickup_time, estimated_delivery_time, actual_pickup_time, actual_delivery_time
       };
 
+      console.log('🔍 DEBUG - Données de commande à insérer:', JSON.stringify(orderToInsert, null, 2));
+
+      // Insérer la commande
       const { data: order, error } = await supabase
         .from('orders')
         .insert([orderToInsert])
@@ -157,11 +425,45 @@ class OrderService {
         .single();
 
       if (error) {
-        console.error('❌ Erreur lors de la création de la commande:', error);
-        return { orderId: null, error };
+        console.error('❌ ERREUR lors de la création de la commande:', error);
+        console.error('❌ Code d\'erreur:', error.code);
+        console.error('❌ Message d\'erreur:', error.message);
+        console.error('❌ Détails:', error.details);
+        console.error('❌ Hint:', error.hint);
+        
+        // 🔍 DEBUG: Analyser l'erreur spécifiquement pour "value too long"
+        if (error.code === '22001') {
+          console.error('🔍 ERREUR 22001 DÉTECTÉE - Valeur trop longue pour un champ');
+          console.error('🔍 Cela indique qu\'une valeur dépasse la limite de caractères définie dans la base de données');
+          console.error('🔍 Vérifiez les champs avec des contraintes de longueur (character varying)');
+        }
+        
+        return { orderId: null, error: error.message };
       }
 
       console.log('✅ Commande créée avec succès:', order.id);
+      console.log('✅ Numéro de commande généré:', orderNumber);
+      
+      // Créer les articles de commande dans la table order_items
+      if (cart?.items && cart.items.length > 0) {
+        try {
+          await this.createOrderItems(order.id, cart.items);
+          console.log('✅ Articles de commande créés avec succès');
+        } catch (itemsError) {
+          console.warn('⚠️ Erreur lors de la création des articles de commande:', itemsError);
+          // Ne pas faire échouer la création de commande pour une erreur d'articles
+        }
+      }
+      
+      // Créer automatiquement un paiement pour la commande
+      try {
+        await this.createPayment(order.id, orderData.grand_total, orderData.payment_method);
+        console.log('✅ Paiement créé automatiquement pour la commande');
+      } catch (paymentError) {
+        console.warn('⚠️ Erreur lors de la création automatique du paiement:', paymentError);
+        // Ne pas faire échouer la création de commande pour une erreur de paiement
+      }
+
       return { orderId: order.id, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la création de la commande:', error);
@@ -232,6 +534,8 @@ class OrderService {
   // Créer un paiement pour une commande
   async createPayment(orderId: string, amount: number, method: string): Promise<{ paymentId: string | null; error: any }> {
     try {
+      console.log('💳 Création du paiement:', { orderId, amount, method });
+      
       const { data: payment, error } = await supabase
         .from('payments')
         .insert([{
@@ -246,13 +550,16 @@ class OrderService {
 
       if (error) {
         console.error('❌ Erreur lors de la création du paiement:', error);
-        return { paymentId: null, error };
+        console.error('❌ Code d\'erreur:', error.code);
+        console.error('❌ Message d\'erreur:', error.message);
+        return { paymentId: null, error: error.message };
       }
 
+      console.log('✅ Paiement créé avec succès:', payment.id);
       return { paymentId: payment.id, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la création du paiement:', error);
-      return { paymentId: null, error };
+      return { paymentId: null, error: error instanceof Error ? error.message : 'Erreur inconnue' };
     }
   }
 
@@ -339,7 +646,7 @@ class OrderService {
     }
   }
 
-  // Récupérer les commandes par statut
+  // Récupérer les commandes par statut (excluant les packages/colis)
   async getOrdersByStatus(userId: string, status: Order['status']): Promise<{ orders: Order[]; error: any }> {
     try {
       const { data: orders, error } = await supabase
@@ -354,7 +661,22 @@ class OrderService {
         return { orders: [], error };
       }
 
-      return { orders: orders || [], error: null };
+      // Récupérer les IDs des commandes de colis pour les exclure
+      const { data: packageOrderIds, error: packageError } = await supabase
+        .from('package_orders')
+        .select('order_id')
+        .not('order_id', 'is', null);
+
+      if (packageError) {
+        console.error('❌ Erreur lors de la récupération des IDs de colis:', packageError);
+      }
+
+      // Filtrer les commandes pour exclure les commandes de colis
+      const packageOrderIdSet = new Set(packageOrderIds?.map(p => p.order_id) || []);
+      const filteredOrders = (orders || []).filter(order => !packageOrderIdSet.has(order.id));
+
+      console.log('🔍 DEBUG - Commandes par statut après filtrage des colis:', filteredOrders.length);
+      return { orders: filteredOrders, error: null };
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des commandes par statut:', error);
       return { orders: [], error };
@@ -379,6 +701,42 @@ class OrderService {
     } catch (error) {
       console.error('❌ Erreur lors de la récupération de l\'historique:', error);
       return { history: [], error };
+    }
+  }
+
+  // Créer les articles de commande dans la table order_items
+  async createOrderItems(orderId: string, items: CartItem[]): Promise<{ success: boolean; error: any }> {
+    try {
+      console.log('🛍️ Création des articles de commande pour la commande:', orderId);
+      
+      const orderItems = items.map(item => ({
+        order_id: orderId,
+        menu_item_id: item.menu_item_id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
+        special_instructions: item.special_instructions,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      console.log('🔍 DEBUG - Articles de commande à insérer:', JSON.stringify(orderItems, null, 2));
+
+      const { error } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (error) {
+        console.error('❌ Erreur lors de la création des articles de commande:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Articles de commande créés avec succès');
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la création des articles de commande:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Erreur inconnue' };
     }
   }
 }

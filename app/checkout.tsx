@@ -1,181 +1,125 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CommuneQuartierSelector from '../components/CommuneQuartierSelector';
+import PaymentWebView from '../components/PaymentWebView';
 import ToastContainer from '../components/ToastContainer';
-import { useCart } from '../hooks/useCart';
+import { useCart } from '../hooks/use-cart';
 import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
-import { type OrderData, type PaymentMethod } from '../lib/services/OrderService';
-
-const { width } = Dimensions.get('window');
+import { orderService } from '../lib/services/OrderService';
+import { PaymentRequest, PaymentService } from '../lib/services/PaymentService';
 
 export default function CheckoutScreen() {
-  console.log('🛒 CheckoutScreen: Component mounted');
-  
   const router = useRouter();
   const { user } = useAuth();
-  const { cart, loading, error, convertToOrder, loadingStates } = useCart();
+  const { cart, loading, loadingStates, clearCart } = useCart();
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
-  const [deliveryType, setDeliveryType] = useState<'asap' | 'scheduled'>('asap');
-  const [selectedDateTime, setSelectedDateTime] = useState<Date>(new Date());
-  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'orange_money' | 'mtn_money' | 'card'>('cash');
+  const [deliveryTimeMode, setDeliveryTimeMode] = useState<'asap' | 'scheduled'>('asap');
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
+  const [scheduledTime, setScheduledTime] = useState<string>('12:00');
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     phone: '',
+    email: '',
     address: '',
-    neighborhood: '',
-    landmark: '',
-    instructions: ''
+    landmark: '', // Point de repère (ajouté)
+    commune: '', // Commune (ajouté)
+    quartier: '', // Quartier (ajouté)
+    notes: ''
   });
 
-  // Méthodes de paiement disponibles (adaptées au schéma)
-  const availablePaymentMethods: PaymentMethod[] = [
-    {
-      id: 1,
-      name: 'cash',
-      icon: '💵',
-      description: 'Paiement à la livraison',
-      is_available: true
-    },
-    {
-      id: 2,
-      name: 'orange_money',
-      icon: '🟠',
-      description: 'Orange Money',
-      is_available: true
-    },
-    {
-      id: 3,
-      name: 'mtn_money',
-      icon: '🟡',
-      description: 'MTN Money',
-      is_available: true
-    },
-    {
-      id: 4,
-      name: 'card',
-      icon: '💳',
-      description: 'Carte bancaire',
-      is_available: true
-    }
-  ];
+  // États pour la sélection de commune et quartier
+  const [selectedCommune, setSelectedCommune] = useState<string>('');
+  const [selectedQuartier, setSelectedQuartier] = useState<string>('');
+  
+  // États pour le paiement
+  const [showPaymentWebView, setShowPaymentWebView] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState<string>('');
+  const [currentOrderId, setCurrentOrderId] = useState<string>('');
 
-  // Charger les données utilisateur et du panier (une seule fois au montage)
+  const paymentMethod = 'card' as const; // Paiement en ligne obligatoire
+
+  // Pré-remplir les informations personnelles depuis le profil utilisateur
   useEffect(() => {
-    if (isInitialized) return; // Éviter les réinitialisations multiples
-    
-    if (user) {
+    if (user && !formData.firstName) {
+      // Extraire prénom et nom depuis le nom complet
+      const fullName = user.name || '';
+      const nameParts = fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
       setFormData(prev => ({
         ...prev,
-        fullName: prev.fullName || user.full_name || user.email?.split('@')[0] || '',
-        phone: prev.phone || user.phone || '',
+        firstName,
+        lastName,
+        email: user.email || '',
+        phone: user.phone_number || ''
       }));
     }
-
-    if (cart) {
-      setFormData(prev => ({
-        ...prev,
-        address: prev.address || cart.delivery_address || '',
-        instructions: prev.instructions || cart.delivery_instructions || '',
-      }));
-      // Ne changer le mode de livraison que s'il n'est pas déjà défini
-      if (!deliveryMethod) {
-        setDeliveryMethod(cart.delivery_method || 'delivery');
-      }
-    }
-    
-    setIsInitialized(true);
-  }, [user, cart, isInitialized]); // Inclure isInitialized pour éviter les boucles
-
-  // Gérer le changement de date/heure
-  const handleDateTimeChange = (event: any, selectedDate?: Date) => {
-    setShowDateTimePicker(false);
-    if (selectedDate) {
-      setSelectedDateTime(selectedDate);
-    }
-  };
-
-  // Formater la date pour l'affichage
-  const formatSelectedDateTime = () => {
-    if (deliveryType === 'asap') {
-      return 'Dès que possible';
-    }
-    
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (selectedDateTime.toDateString() === now.toDateString()) {
-      return `Aujourd'hui à ${selectedDateTime.toLocaleTimeString('fr-FR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })}`;
-    } else if (selectedDateTime.toDateString() === tomorrow.toDateString()) {
-      return `Demain à ${selectedDateTime.toLocaleTimeString('fr-FR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })}`;
-    } else {
-      return selectedDateTime.toLocaleDateString('fr-FR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
-  };
-
-  // Validation de la date sélectionnée
-  const isDateTimeValid = () => {
-    if (deliveryType === 'asap') return true;
-    
-    const now = new Date();
-    const minDateTime = new Date(now.getTime() + 30 * 60000); // 30 minutes minimum
-    
-    return selectedDateTime >= minDateTime;
-  };
+  }, [user, formData.firstName]);
 
   // Calculer les totaux
   const cartTotal = cart?.items?.reduce((total, item) => total + (item.price * item.quantity), 0) || 0;
-  const deliveryFee = deliveryMethod === 'delivery' ? 15000 : 0;
-  const tax = Math.round(cartTotal * 0.18); // 18% TVA
-  const grandTotal = cartTotal + deliveryFee + tax;
+  const baseDeliveryFee = deliveryMethod === 'delivery' ? 15000 : 0;
+  const deliveryFee = cart?.is_multi_service ? Math.round(baseDeliveryFee * 1.5) : baseDeliveryFee;
+  const planningFee = deliveryMethod === 'delivery' && deliveryTimeMode === 'scheduled' ? 2000 : 0; // Frais de planification
+  const serviceFee = Math.round(cartTotal * 0.02); // 2% frais de service
+  const grandTotal = cartTotal + deliveryFee + planningFee + serviceFee;
+
+  // Gestion des changements de commune et quartier
+  const handleCommuneChange = (communeId: string) => {
+    setSelectedCommune(communeId);
+    setSelectedQuartier(''); // Réinitialiser le quartier
+    setFormData(prev => ({ ...prev, commune: communeId, quartier: '' }));
+  };
+
+  const handleQuartierChange = (quartierId: string) => {
+    setSelectedQuartier(quartierId);
+    setFormData(prev => ({ ...prev, quartier: quartierId }));
+  };
 
   // Validation du formulaire
   const isFormValid = () => {
     if (!cart || cart.items.length === 0) return false;
     
-    const requiredFields = [formData.fullName, formData.phone];
+    const requiredFields = [formData.firstName, formData.lastName, formData.phone];
     
-    if (deliveryMethod === 'delivery') {
-      // Valider les champs d'adresse manuels
-      const addressFields = [formData.address, formData.neighborhood];
-      if (!addressFields.every(field => field.trim() !== '')) {
-        return false;
-      }
+    if (deliveryMethod === 'delivery' && !formData.address.trim()) {
+      return false;
     }
     
-    // Valider la date/heure pour les livraisons programmées
-    if (deliveryType === 'scheduled' && !isDateTimeValid()) {
+    // Validation commune et quartier pour la livraison
+    if (deliveryMethod === 'delivery' && (!selectedCommune || !selectedQuartier)) {
       return false;
+    }
+    
+    // Validation pour la livraison programmée
+    if (deliveryMethod === 'delivery' && deliveryTimeMode === 'scheduled') {
+      if (!scheduledDate || !scheduledTime) {
+        return false;
+      }
+      
+      // Vérifier que la date est dans le futur
+      const scheduledDateTime = new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`);
+      if (scheduledDateTime <= new Date()) {
+        return false;
+      }
     }
     
     return requiredFields.every(field => field.trim() !== '');
@@ -184,10 +128,6 @@ export default function CheckoutScreen() {
   // Gérer la soumission de la commande
   const handleSubmitOrder = async () => {
     if (!isFormValid()) {
-      if (deliveryType === 'scheduled' && !isDateTimeValid()) {
-        showToast('error', 'Veuillez sélectionner une date/heure valide (minimum 30 minutes).');
-        return;
-      }
       showToast('error', 'Veuillez remplir tous les champs obligatoires.');
       return;
     }
@@ -198,47 +138,176 @@ export default function CheckoutScreen() {
     }
 
     try {
-      // Préparer les données de commande selon le schéma de base de données
-      const orderData: OrderData = {
+      // Préparer les données de commande complètes (adapté au schéma mobile)
+      const orderData = {
         user_id: user.id,
-        business_id: cart?.business_id,
-        business_name: cart?.business_name || 'Commerce',
-        items: cart?.items || [],
-        status: 'pending',
+        business_id: cart?.is_multi_service ? undefined : cart?.business_id,
+        // items n'existe pas dans le schéma mobile (table séparée order_items)
+        status: 'pending' as const,
         total: cartTotal,
         delivery_fee: deliveryFee,
-        tax,
+        service_fee: serviceFee, // Renommé de 'tax' vers 'service_fee'
         grand_total: grandTotal,
         delivery_method: deliveryMethod,
-        delivery_address: deliveryMethod === 'delivery' ? `${formData.address}, ${formData.neighborhood}` : undefined,
-        delivery_instructions: formData.instructions || undefined,
+        delivery_address: deliveryMethod === 'delivery' ? formData.address : undefined,
+        delivery_instructions: formData.notes || undefined,
         payment_method: paymentMethod,
-        payment_status: 'pending',
-        // Nouveaux champs pour la livraison programmée
-        preferred_delivery_time: deliveryType === 'scheduled' ? selectedDateTime.toISOString() : undefined,
-        delivery_type: deliveryType,
-        // Coordonnées temporairement désactivées
-        pickup_coordinates: undefined,
-        delivery_coordinates: undefined,
+        payment_status: 'pending' as const,
+        
+        // Coordonnées GPS
+        delivery_latitude: deliveryMethod === 'delivery' && formData.address ? 9.5370 : undefined,
+        delivery_longitude: deliveryMethod === 'delivery' && formData.address ? -13.6785 : undefined,
+        delivery_formatted_address: deliveryMethod === 'delivery' ? formData.address : undefined,
+        pickup_latitude: undefined,
+        pickup_longitude: undefined,
+        pickup_formatted_address: undefined,
+        
+        // Coordonnées JSONB
+        delivery_coordinates: deliveryMethod === 'delivery' && formData.address ? {
+          latitude: 9.5370,
+          longitude: -13.6785
+        } : undefined,
+        
+        // Zone géographique
+        zone: deliveryMethod === 'delivery' ? 'Conakry' : undefined,
+        commune: deliveryMethod === 'delivery' ? formData.commune || 'Conakry' : undefined,
+        quartier: deliveryMethod === 'delivery' ? formData.quartier || 'Centre-ville' : undefined,
+        
+        // Type de livraison
+        delivery_type: deliveryTimeMode,
+        scheduled_delivery_window_start: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+        scheduled_delivery_window_end: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+        preferred_delivery_time: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+        
+        // Informations de livraison
+        estimated_delivery: deliveryMethod === 'delivery' ? 
+          new Date(Date.now() + (30 + Math.random() * 15) * 60000).toISOString() : undefined,
+        
+        // Point de repère
+        landmark: formData.landmark || undefined,
+        
+        // Champs qui n'existent pas dans le schéma mobile (supprimés)
+        // customer_rating, customer_review
       };
 
-      const { success, orderId, error: orderError } = await convertToOrder(orderData);
+      console.log('🔍 DEBUG - Données de commande préparées:', orderData);
+
+      // Créer la commande sans vider le panier pour l'instant
+      const { success, orderId, error: orderError } = await createOrderWithoutClearingCart(orderData, cart || undefined);
       
       if (success && orderId) {
-        const deliveryMessage = deliveryType === 'scheduled' 
-          ? `Commande #${orderId} programmée pour ${formatSelectedDateTime()} !`
-          : `Commande #${orderId} créée avec succès !`;
+        console.log('✅ Commande créée avec succès:', orderId);
+        setCurrentOrderId(orderId);
         
-        showToast('success', deliveryMessage);
-        
-        // Rediriger vers la page de succès
-        router.push(`/order-success?orderId=${orderId}`);
+        // Créer le paiement via Lengo Pay
+        await handleCreatePayment(orderId);
       } else {
         showToast('error', orderError || 'Impossible de créer la commande. Veuillez réessayer.');
       }
     } catch (error) {
       console.error('Erreur lors de la création de la commande:', error);
       showToast('error', 'Une erreur est survenue lors de la création de la commande.');
+    }
+  };
+
+  // Créer le paiement via Lengo Pay
+  const handleCreatePayment = async (orderId: string) => {
+    try {
+      if (!user?.id || !cart) {
+        showToast('error', 'Données utilisateur ou panier manquantes');
+        return;
+      }
+
+      // Préparer les données de paiement
+      const paymentData: PaymentRequest = {
+        order_id: orderId,
+        user_id: user.id,
+        amount: grandTotal,
+        currency: 'GNF',
+        payment_method: 'mobile_money',
+        phone_number: formData.phone,
+        order_number: orderId, // Utiliser l'ID de commande comme numéro
+        business_name: cart.is_multi_service ? 'Multi-services' : (cart.business_name || 'BraPrime'),
+        customer_name: `${formData.firstName} ${formData.lastName}`.trim(),
+        customer_email: formData.email || user.email || '',
+      };
+
+      console.log('🔍 DEBUG - Création du paiement avec les données:', paymentData);
+
+      const paymentResponse = await PaymentService.createPayment(paymentData);
+      
+      console.log('🔍 DEBUG - Réponse du paiement:', paymentResponse);
+      
+      if (paymentResponse.success && paymentResponse.payment_url) {
+        setPaymentUrl(paymentResponse.payment_url);
+        setShowPaymentWebView(true);
+        showToast('success', 'Redirection vers le paiement...');
+      } else {
+        throw new Error(paymentResponse.error || 'Erreur lors de la création du paiement');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du paiement:', error);
+      showToast('error', error instanceof Error ? error.message : 'Erreur lors de la création du paiement');
+    }
+  };
+
+  // Gérer le succès du paiement
+  const handlePaymentSuccess = async (payId: string) => {
+    console.log('✅ Paiement réussi avec pay_id:', payId);
+    setShowPaymentWebView(false);
+    
+    // Vider le panier maintenant que le paiement est confirmé
+    try {
+      await clearCart();
+      console.log('🛒 Panier vidé après paiement réussi');
+    } catch (error) {
+      console.error('❌ Erreur lors du vidage du panier:', error);
+    }
+    
+    showToast('success', 'Paiement effectué avec succès !');
+    
+    // Rediriger vers la page de confirmation
+    router.replace(`/payment-confirmation?pay_id=${payId}&order_id=${currentOrderId}&status=success` as any);
+  };
+
+  // Gérer l'erreur du paiement
+  const handlePaymentError = (error: string) => {
+    console.log('❌ Erreur de paiement:', error);
+    setShowPaymentWebView(false);
+    showToast('error', error);
+    
+    // Rediriger vers la page de confirmation avec le statut d'erreur
+    router.replace(`/payment-confirmation?pay_id=unknown&order_id=${currentOrderId}&status=failed` as any);
+  };
+
+  // Fermer la WebView de paiement
+  const handleClosePaymentWebView = () => {
+    setShowPaymentWebView(false);
+    showToast('info', 'Paiement annulé');
+  };
+
+  // Créer une commande sans vider le panier
+  const createOrderWithoutClearingCart = async (orderData: any, cartData: any) => {
+    try {
+      console.log('🛒 Création de commande sans vider le panier:', orderData);
+      
+      // Utiliser directement le service de commandes sans passer par convertToOrder
+      const { orderId, error: orderError } = await orderService.createOrder(orderData, cartData);
+      
+      if (orderId) {
+        console.log('✅ Commande créée sans vider le panier:', orderId);
+        return { success: true, orderId };
+      } else {
+        console.error('❌ Erreur lors de la création de la commande:', orderError);
+        return { success: false, error: orderError || 'Erreur lors de la création de la commande' };
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la commande';
+      console.error('❌ Erreur dans createOrderWithoutClearingCart:', err);
+      return { success: false, error: errorMessage };
     }
   };
 
@@ -278,7 +347,6 @@ export default function CheckoutScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Toast Container */}
       <ToastContainer />
 
       {/* Header */}
@@ -291,226 +359,209 @@ export default function CheckoutScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
-        {/* Mode de livraison */}
+        {/* Articles commandés */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="local-shipping" size={20} color="#E31837" />
-            <Text style={styles.sectionTitle}>Mode de livraison</Text>
+            <MaterialIcons name="shopping-cart" size={20} color="#E31837" />
+            <Text style={styles.sectionTitle}>Articles commandés</Text>
           </View>
           <View style={styles.sectionContent}>
-            <View style={styles.deliveryOptionsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.deliveryOptionCard,
-                  deliveryMethod === 'delivery' && styles.deliveryOptionCardActive
-                ]}
-                onPress={() => setDeliveryMethod('delivery')}
-              >
-                <View style={styles.deliveryOptionHeader}>
-                  <View style={styles.deliveryOptionIcon}>
-                    <MaterialIcons 
-                      name="local-shipping" 
-                      size={24} 
-                      color={deliveryMethod === 'delivery' ? '#E31837' : '#666'} 
-                    />
-                  </View>
-                  <View style={styles.deliveryOptionRadio}>
-                    <View style={[
-                      styles.radioButton,
-                      deliveryMethod === 'delivery' && styles.radioButtonActive
-                    ]}>
-                      {deliveryMethod === 'delivery' && (
-                        <View style={styles.radioButtonInner} />
-                      )}
+            {cart?.items && cart.items.length > 0 ? (
+              <View style={styles.itemsContainer}>
+                {cart.is_multi_service && cart.businesses && cart.businesses.length > 0 ? (
+                  // Affichage multi-services
+                  cart.businesses
+                    .map((business) => {
+                      // Filtrer les articles qui appartiennent à ce business
+                      const businessItems = cart.items?.filter(item => 
+                        item.business_id === business.id
+                      ) || [];
+                      
+                      // Ne pas afficher la section si aucun article pour ce business
+                      if (businessItems.length === 0) return null;
+                      
+                      return (
+                        <View key={business.id} style={styles.businessSection}>
+                          <View style={styles.businessHeader}>
+                            <MaterialIcons name="store" size={16} color="#4CAF50" />
+                            <Text style={styles.businessTitle}>{business.name}</Text>
+                            <Text style={styles.businessTotal}>
+                              {businessItems.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0).toLocaleString()} GNF
+                            </Text>
+                          </View>
+                          {businessItems.map((item, index) => (
+                            <View key={`${business.id}-${item.id || index}`} style={styles.cartItem}>
+                              <View style={styles.itemImageContainer}>
+                                {item.image ? (
+                                  <Image source={{ uri: item.image }} style={styles.itemImage} />
+                                ) : (
+                                  <View style={styles.itemImagePlaceholder}>
+                                    <MaterialIcons name="restaurant" size={20} color="#ccc" />
+                                  </View>
+                                )}
+                            </View>
+                            <View style={styles.itemDetails}>
+                              <Text style={styles.itemName}>{item.name}</Text>
+                              <View style={styles.itemMeta}>
+                                <Text style={styles.itemQuantity}>Qté: {item.quantity}</Text>
+                                <Text style={styles.itemPrice}>{((item.price || 0) * (item.quantity || 0)).toLocaleString()} GNF</Text>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })
+                    .filter(Boolean) // Supprimer les sections vides (null)
+                ) : (
+                  // Affichage simple pour un seul service
+                  cart.items && cart.items.length > 0 && cart.items.map((item, index) => (
+                    <View key={index} style={styles.cartItem}>
+                      <View style={styles.itemImageContainer}>
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={styles.itemImage} />
+                        ) : (
+                          <View style={styles.itemImagePlaceholder}>
+                            <MaterialIcons name="restaurant" size={20} color="#ccc" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.itemDetails}>
+                        <Text style={styles.itemName}>{item.name}</Text>
+                        <View style={styles.itemMeta}>
+                          <Text style={styles.itemQuantity}>Qté: {item.quantity}</Text>
+                          <Text style={styles.itemPrice}>{((item.price || 0) * (item.quantity || 0)).toLocaleString()} GNF</Text>
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </View>
-                <View style={styles.deliveryOptionContent}>
-                  <Text style={[
-                    styles.deliveryOptionTitle,
-                    deliveryMethod === 'delivery' && styles.deliveryOptionTitleActive
-                  ]}>
-                    Livraison
-                  </Text>
-                  <Text style={styles.deliveryOptionPrice}>
-                    {deliveryFee > 0 ? `${deliveryFee.toLocaleString()} GNF` : 'Frais inclus'}
-                  </Text>
-                  <Text style={styles.deliveryOptionDescription}>
-                    Livraison à domicile
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.deliveryOptionCard,
-                  deliveryMethod === 'pickup' && styles.deliveryOptionCardActive
-                ]}
-                onPress={() => setDeliveryMethod('pickup')}
-              >
-                <View style={styles.deliveryOptionHeader}>
-                  <View style={styles.deliveryOptionIcon}>
-                    <MaterialIcons 
-                      name="store" 
-                      size={24} 
-                      color={deliveryMethod === 'pickup' ? '#E31837' : '#666'} 
-                    />
-                  </View>
-                  <View style={styles.deliveryOptionRadio}>
-                    <View style={[
-                      styles.radioButton,
-                      deliveryMethod === 'pickup' && styles.radioButtonActive
-                    ]}>
-                      {deliveryMethod === 'pickup' && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.deliveryOptionContent}>
-                  <Text style={[
-                    styles.deliveryOptionTitle,
-                    deliveryMethod === 'pickup' && styles.deliveryOptionTitleActive
-                  ]}>
-                    À emporter
-                  </Text>
-                  <Text style={styles.deliveryOptionPrice}>
-                    Aucun frais supplémentaire
-                  </Text>
-                  <Text style={styles.deliveryOptionDescription}>
-                    Récupérez votre commande sur place
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+                  ))
+                )}
+              </View>
+            ) : (
+              <View style={styles.emptyItemsContainer}>
+                <MaterialIcons name="shopping-cart" size={48} color="#ccc" />
+                <Text style={styles.emptyItemsText}>Aucun article dans le panier</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Type de livraison - Seulement si livraison */}
-        {deliveryMethod === 'delivery' && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="schedule" size={20} color="#E31837" />
-              <Text style={styles.sectionTitle}>Type de livraison</Text>
-            </View>
-            <View style={styles.sectionContent}>
-              <View style={styles.deliveryTypeContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.deliveryTypeCard,
-                    deliveryType === 'asap' && styles.deliveryTypeCardActive
-                  ]}
-                  onPress={() => setDeliveryType('asap')}
-                >
-                  <View style={styles.deliveryTypeHeader}>
-                    <View style={styles.deliveryTypeIcon}>
-                      <MaterialIcons 
-                        name="flash-on" 
-                        size={24} 
-                        color={deliveryType === 'asap' ? '#E31837' : '#666'} 
-                      />
-                    </View>
-                    <View style={styles.deliveryTypeRadio}>
-                      <View style={[
-                        styles.radioButton,
-                        deliveryType === 'asap' && styles.radioButtonActive
-                      ]}>
-                        {deliveryType === 'asap' && (
-                          <View style={styles.radioButtonInner} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.deliveryTypeContent}>
-                    <Text style={[
-                      styles.deliveryTypeTitle,
-                      deliveryType === 'asap' && styles.deliveryTypeTitleActive
-                    ]}>
-                      Dès que possible
-                    </Text>
-                    <Text style={styles.deliveryTypeDescription}>
-                      Livraison en 30-60 minutes
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                 {/* Mode de livraison */}
+         <View style={styles.section}>
+           <View style={styles.sectionHeader}>
+             <MaterialIcons name="local-shipping" size={20} color="#E31837" />
+             <Text style={styles.sectionTitle}>Mode de livraison</Text>
+           </View>
+           <View style={styles.sectionContent}>
+             <TouchableOpacity
+               style={[
+                 styles.deliveryOptionCard,
+                 deliveryMethod === 'delivery' && styles.deliveryOptionCardActive
+               ]}
+               onPress={() => setDeliveryMethod('delivery')}
+             >
+               <Text style={styles.deliveryOptionTitle}>Livraison à domicile</Text>
+               <Text style={styles.deliveryOptionPrice}>{(deliveryFee || 0).toLocaleString()} GNF</Text>
+             </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.deliveryTypeCard,
-                    deliveryType === 'scheduled' && styles.deliveryTypeCardActive
-                  ]}
-                  onPress={() => setDeliveryType('scheduled')}
-                >
-                  <View style={styles.deliveryTypeHeader}>
-                    <View style={styles.deliveryTypeIcon}>
-                      <MaterialIcons 
-                        name="event" 
-                        size={24} 
-                        color={deliveryType === 'scheduled' ? '#E31837' : '#666'} 
-                      />
-                    </View>
-                    <View style={styles.deliveryTypeRadio}>
-                      <View style={[
-                        styles.radioButton,
-                        deliveryType === 'scheduled' && styles.radioButtonActive
-                      ]}>
-                        {deliveryType === 'scheduled' && (
-                          <View style={styles.radioButtonInner} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.deliveryTypeContent}>
-                    <Text style={[
-                      styles.deliveryTypeTitle,
-                      deliveryType === 'scheduled' && styles.deliveryTypeTitleActive
-                    ]}>
-                      Livraison programmée
-                    </Text>
-                    <Text style={styles.deliveryTypeDescription}>
-                      Choisissez votre date et heure
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
+             <TouchableOpacity
+               style={[
+                 styles.deliveryOptionCard,
+                 deliveryMethod === 'pickup' && styles.deliveryOptionCardActive
+               ]}
+               onPress={() => setDeliveryMethod('pickup')}
+             >
+               <Text style={styles.deliveryOptionTitle}>À emporter</Text>
+               <Text style={styles.deliveryOptionPrice}>Aucun frais</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
 
-              {/* Sélection de date/heure pour les livraisons programmées */}
-              {deliveryType === 'scheduled' && (
-                <View style={styles.dateTimeSection}>
-                  <View style={styles.dateTimeHeader}>
-                    <MaterialIcons name="access-time" size={20} color="#E31837" />
-                    <Text style={styles.dateTimeTitle}>Date et heure de livraison</Text>
-                  </View>
-                  
-                  <TouchableOpacity
-                    style={[
-                      styles.dateTimeButton,
-                      !isDateTimeValid() && styles.dateTimeButtonError
-                    ]}
-                    onPress={() => setShowDateTimePicker(true)}
-                  >
-                    <View style={styles.dateTimeButtonContent}>
-                      <MaterialIcons name="event" size={20} color="#666" />
-                      <Text style={[
-                        styles.dateTimeButtonText,
-                        !isDateTimeValid() && styles.dateTimeButtonTextError
-                      ]}>
-                        {formatSelectedDateTime()}
-                      </Text>
-                      <MaterialIcons name="keyboard-arrow-down" size={20} color="#666" />
-                    </View>
-                  </TouchableOpacity>
-                  
-                  {!isDateTimeValid() && deliveryType === 'scheduled' && (
-                    <Text style={styles.dateTimeErrorText}>
-                      Veuillez sélectionner une date/heure valide (minimum 30 minutes)
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          </View>
-        )}
+         {/* Type de livraison (ASAP ou programmée) */}
+         {deliveryMethod === 'delivery' && (
+           <View style={styles.section}>
+             <View style={styles.sectionHeader}>
+               <MaterialIcons name="schedule" size={20} color="#E31837" />
+               <Text style={styles.sectionTitle}>Horaires de livraison</Text>
+             </View>
+             <View style={styles.sectionContent}>
+               <View style={styles.deliveryTimeContainer}>
+                 <TouchableOpacity
+                   style={[
+                     styles.deliveryTimeOption,
+                     deliveryTimeMode === 'asap' && styles.deliveryTimeOptionActive
+                   ]}
+                   onPress={() => setDeliveryTimeMode('asap')}
+                 >
+                   <MaterialIcons name="local-shipping" size={16} color={deliveryTimeMode === 'asap' ? '#E31837' : '#666'} />
+                   <Text style={[styles.deliveryTimeTitle, deliveryTimeMode === 'asap' && styles.deliveryTimeTitleActive]}>
+                     Livraison rapide
+                   </Text>
+                   <Text style={styles.deliveryTimeSubtitle}>30-45 min</Text>
+                 </TouchableOpacity>
+
+                 <TouchableOpacity
+                   style={[
+                     styles.deliveryTimeOption,
+                     deliveryTimeMode === 'scheduled' && styles.deliveryTimeOptionActive
+                   ]}
+                   onPress={() => setDeliveryTimeMode('scheduled')}
+                 >
+                   <MaterialIcons name="schedule" size={16} color={deliveryTimeMode === 'scheduled' ? '#E31837' : '#666'} />
+                   <Text style={[styles.deliveryTimeTitle, deliveryTimeMode === 'scheduled' && styles.deliveryTimeTitleActive]}>
+                     Livraison programmée
+                   </Text>
+                   <Text style={styles.deliveryTimeSubtitle}>+2000 GNF</Text>
+                 </TouchableOpacity>
+               </View>
+
+               {/* Sélecteurs de date et heure pour la livraison programmée */}
+               {deliveryTimeMode === 'scheduled' && (
+                 <View style={styles.scheduledDeliveryContainer}>
+                   <View style={styles.inputRow}>
+                     <View style={styles.inputContainer}>
+                       <Text style={styles.inputLabel}>Date de livraison *</Text>
+                       <TextInput
+                         style={styles.input}
+                         value={scheduledDate ? scheduledDate.toISOString().split('T')[0] : ''}
+                         onChangeText={(text) => {
+                           if (text) {
+                             const date = new Date(text);
+                             if (!isNaN(date.getTime())) {
+                               setScheduledDate(date);
+                             }
+                           }
+                         }}
+                         placeholder="YYYY-MM-DD"
+                         placeholderTextColor="#999"
+                       />
+                     </View>
+                     
+                     <View style={styles.inputContainer}>
+                       <Text style={styles.inputLabel}>Heure de livraison *</Text>
+                       <TextInput
+                         style={styles.input}
+                         value={scheduledTime}
+                         onChangeText={setScheduledTime}
+                         placeholder="HH:MM"
+                         placeholderTextColor="#999"
+                       />
+                     </View>
+                   </View>
+                   
+                   {scheduledDate && scheduledTime && (
+                     <View style={styles.scheduledInfoContainer}>
+                       <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
+                       <Text style={styles.scheduledInfoText}>
+                         Livraison programmée le {scheduledDate.toLocaleDateString('fr-FR')} à {scheduledTime}
+                       </Text>
+                     </View>
+                   )}
+                 </View>
+               )}
+             </View>
+           </View>
+         )}
 
         {/* Informations personnelles */}
         <View style={styles.section}>
@@ -521,14 +572,39 @@ export default function CheckoutScreen() {
           <View style={styles.sectionContent}>
             <View style={styles.inputRow}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Nom complet *</Text>
+                <Text style={styles.inputLabel}>Prénom *</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.fullName}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
-                  placeholder="Votre nom complet"
+                  value={formData.firstName}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+                  placeholder="Votre prénom"
+                  placeholderTextColor="#999"
                 />
               </View>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Nom de famille *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.lastName}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+                  placeholder="Votre nom de famille"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+            
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.email}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+                placeholder="votre.email@exemple.com"
+                placeholderTextColor="#999"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
             
             <View style={styles.inputContainer}>
@@ -538,13 +614,14 @@ export default function CheckoutScreen() {
                 value={formData.phone}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
                 placeholder="+224 XXX XX XX XX"
+                placeholderTextColor="#999"
                 keyboardType="phone-pad"
               />
             </View>
           </View>
         </View>
 
-        {/* Adresse de livraison - Seulement si livraison */}
+        {/* Adresse de livraison */}
         {deliveryMethod === 'delivery' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -552,50 +629,54 @@ export default function CheckoutScreen() {
               <Text style={styles.sectionTitle}>Adresse de livraison</Text>
             </View>
             <View style={styles.sectionContent}>
-              {/* Adresse manuelle temporaire */}
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Adresse de livraison *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.address}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-                  placeholder="Entrez votre adresse complète"
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Quartier *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.neighborhood}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, neighborhood: text }))}
-                  placeholder="Ex: Kaloum, Almamya, Ratoma..."
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Point de repère (optionnel)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.landmark}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, landmark: text }))}
-                  placeholder="Ex: Près de la station Total, bâtiment rouge..."
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Instructions de livraison</Text>
+                <Text style={styles.inputLabel}>Adresse complète *</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  value={formData.instructions}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, instructions: text }))}
-                  placeholder="Instructions spéciales pour le livreur"
+                  value={formData.address}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+                  placeholder="Votre adresse complète"
+                  placeholderTextColor="#999"
                   multiline
                   numberOfLines={3}
                 />
               </View>
+
+              {/* Sélection commune et quartier */}
+              <View style={styles.locationSelectorContainer}>
+                <Text style={styles.locationSelectorTitle}>📍 Sélection de votre localisation</Text>
+                <CommuneQuartierSelector
+                  selectedCommune={selectedCommune}
+                  selectedQuartier={selectedQuartier}
+                  onCommuneChange={handleCommuneChange}
+                  onQuartierChange={handleQuartierChange}
+                  required={true}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Point de repère</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.landmark}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, landmark: text }))}
+                  placeholder="Ex: près de la pharmacie, école..."
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+               <View style={styles.inputContainer}>
+                 <Text style={styles.inputLabel}>Instructions de livraison</Text>
+                 <TextInput
+                   style={[styles.input, styles.textArea]}
+                   value={formData.notes}
+                   onChangeText={(text) => setFormData(prev => ({ ...prev, notes: text }))}
+                   placeholder="Instructions spéciales pour le livreur"
+                   placeholderTextColor="#999"
+                   multiline
+                   numberOfLines={3}
+                 />
+               </View>
             </View>
           </View>
         )}
@@ -607,116 +688,62 @@ export default function CheckoutScreen() {
             <Text style={styles.sectionTitle}>Mode de paiement</Text>
           </View>
           <View style={styles.sectionContent}>
-            <View style={styles.paymentOptionsContainer}>
-              {availablePaymentMethods.map((method) => (
-                <TouchableOpacity
-                  key={method.id}
-                  style={[
-                    styles.paymentOptionCard,
-                    paymentMethod === method.name && styles.paymentOptionCardActive
-                  ]}
-                  onPress={() => setPaymentMethod(method.name as any)}
-                  disabled={!method.is_available}
-                >
-                  <View style={styles.paymentOptionHeader}>
-                    <View style={styles.paymentOptionIcon}>
-                      <Text style={styles.paymentEmoji}>{method.icon}</Text>
-                    </View>
-                    <View style={styles.paymentOptionRadio}>
-                      <View style={[
-                        styles.radioButton,
-                        paymentMethod === method.name && styles.radioButtonActive
-                      ]}>
-                        {paymentMethod === method.name && (
-                          <View style={styles.radioButtonInner} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.paymentOptionContent}>
-                    <Text style={[
-                      styles.paymentOptionTitle,
-                      paymentMethod === method.name && styles.paymentOptionTitleActive
-                    ]}>
-                      {method.description}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.paymentMethodCard}>
+              <Text style={styles.paymentEmoji}>💳</Text>
+              <View style={styles.paymentMethodContent}>
+                <Text style={styles.paymentMethodTitle}>Paiement en ligne obligatoire</Text>
+                <Text style={styles.paymentMethodDescription}>
+                  Orange Money / MTN Money via Lengo Pay
+                </Text>
+              </View>
+              <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
             </View>
           </View>
         </View>
 
-        {/* Espace pour le bouton de confirmation */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
-
-      {/* DateTimePicker Modal */}
-      {showDateTimePicker && (
-        <DateTimePicker
-          value={selectedDateTime}
-          mode="datetime"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleDateTimeChange}
-          minimumDate={new Date(Date.now() + 30 * 60000)} // 30 minutes minimum
-          maximumDate={new Date(Date.now() + 7 * 24 * 60 * 60000)} // 7 jours maximum
-        />
-      )}
 
       {/* Résumé de commande fixe en bas */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryHeader}>
           <Text style={styles.summaryTitle}>Résumé de la commande</Text>
-          {cart?.business_name && (
-            <View style={styles.businessInfo}>
-              <MaterialIcons name="store" size={16} color="#4CAF50" />
-              <Text style={styles.businessName}>{cart.business_name}</Text>
-            </View>
-          )}
         </View>
         
         <View style={styles.summaryContent}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Sous-total</Text>
-            <Text style={styles.summaryValue}>{cartTotal.toLocaleString()} GNF</Text>
-          </View>
-          
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>TVA (18%)</Text>
-            <Text style={styles.summaryValue}>{tax.toLocaleString()} GNF</Text>
-          </View>
-          
-          <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>
-              {deliveryMethod === 'delivery' ? 'Frais de livraison' : 'Frais de préparation'}
+              {cart?.items?.length || 0} article{(cart?.items?.length || 0) > 1 ? 's' : ''}
             </Text>
-            <Text style={styles.summaryValue}>{deliveryFee.toLocaleString()} GNF</Text>
+            <Text style={styles.summaryValue}>{(cartTotal || 0).toLocaleString()} GNF</Text>
           </View>
+          
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Frais de service (2%)</Text>
+            <Text style={styles.summaryValue}>{(serviceFee || 0).toLocaleString()} GNF</Text>
+          </View>
+          
+                     <View style={styles.summaryRow}>
+             <Text style={styles.summaryLabel}>
+               {deliveryMethod === 'delivery' ? 'Livraison' : 'Préparation'}
+             </Text>
+             <Text style={styles.summaryValue}>{(deliveryFee || 0).toLocaleString()} GNF</Text>
+           </View>
+           
+           {/* Frais de planification pour la livraison programmée */}
+           {deliveryMethod === 'delivery' && deliveryTimeMode === 'scheduled' && (
+             <View style={styles.summaryRow}>
+               <Text style={styles.summaryLabel}>Frais de planification</Text>
+               <Text style={styles.summaryValue}>{(planningFee || 0).toLocaleString()} GNF</Text>
+             </View>
+           )}
           
           <View style={styles.summaryDivider} />
           
           <View style={styles.summaryRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{grandTotal.toLocaleString()} GNF</Text>
+            <Text style={styles.totalValue}>{(grandTotal || 0).toLocaleString()} GNF</Text>
           </View>
-        </View>
-        
-        <View style={styles.deliveryInfo}>
-          <View style={styles.deliveryInfoContent}>
-            <MaterialIcons 
-              name={deliveryMethod === 'delivery' ? 'local-shipping' : 'store'} 
-              size={16} 
-              color="#E31837" 
-            />
-            <Text style={styles.deliveryInfoText}>
-              {deliveryMethod === 'delivery' ? 'Livraison à domicile' : 'À récupérer sur place'}
-            </Text>
-          </View>
-          <Text style={styles.deliveryTimeText}>
-            {deliveryMethod === 'delivery' 
-              ? 'Livraison estimée: 30-60 minutes' 
-              : 'Préparation estimée: 20-30 minutes'}
-          </Text>
         </View>
 
         <View style={styles.actionButtons}>
@@ -734,7 +761,7 @@ export default function CheckoutScreen() {
               <MaterialIcons name="shopping-cart-checkout" size={20} color="#FFF" />
             )}
             <Text style={styles.confirmButtonText}>
-              {loadingStates.convertToOrder ? 'Traitement...' : 'Passer la commande'}
+              {loadingStates.convertToOrder ? 'Traitement...' : 'Passer la commande et payer'}
             </Text>
           </TouchableOpacity>
           
@@ -743,6 +770,22 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Modal WebView pour le paiement */}
+      <Modal
+        visible={showPaymentWebView}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleClosePaymentWebView}
+        statusBarTranslucent={false}
+      >
+        <PaymentWebView
+          paymentUrl={paymentUrl}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentError={handlePaymentError}
+          onClose={handleClosePaymentWebView}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -834,6 +877,11 @@ const styles = StyleSheet.create({
   sectionContent: {
     padding: 16,
   },
+  summaryText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
   inputRow: {
     flexDirection: 'row',
     gap: 12,
@@ -861,9 +909,6 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: 'top',
   },
-  deliveryOptionsContainer: {
-    gap: 12,
-  },
   deliveryOptionCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
@@ -876,110 +921,42 @@ const styles = StyleSheet.create({
     borderColor: '#E31837',
     backgroundColor: '#fef2f2',
   },
-  deliveryOptionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  deliveryOptionIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deliveryOptionRadio: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioButton: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-  },
-  radioButtonActive: {
-    backgroundColor: '#E31837',
-  },
-  radioButtonInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-  },
-  deliveryOptionContent: {
-    flex: 1,
-  },
   deliveryOptionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
     marginBottom: 4,
   },
-  deliveryOptionTitleActive: {
-    color: '#E31837',
-  },
   deliveryOptionPrice: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-    marginBottom: 2,
-  },
-  deliveryOptionDescription: {
-    fontSize: 14,
     color: '#666',
   },
-  paymentOptionsContainer: {
-    gap: 12,
-  },
-  paymentOptionCard: {
+  paymentMethodCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: '#4CAF50',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 8,
-  },
-  paymentOptionCardActive: {
-    borderColor: '#E31837',
-    backgroundColor: '#fef2f2',
-  },
-  paymentOptionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  paymentOptionIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  paymentOptionRadio: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  paymentOptionContent: {
-    flex: 1,
-  },
-  paymentOptionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  paymentOptionTitleActive: {
-    color: '#E31837',
   },
   paymentEmoji: {
     fontSize: 24,
-    marginRight: 8,
+    marginRight: 16,
+  },
+  paymentMethodContent: {
+    flex: 1,
+  },
+  paymentMethodTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  paymentMethodDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
   },
   bottomSpacer: {
     height: 16,
@@ -997,11 +974,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
+    maxHeight: '60%',
+    minHeight: 300,
   },
   summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 16,
   },
   summaryTitle: {
@@ -1009,18 +985,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
   },
-  businessInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  businessName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-    marginLeft: 4,
-  },
   summaryContent: {
     marginBottom: 16,
+    maxHeight: 200,
+    overflow: 'hidden',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1051,28 +1019,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#E31837',
-  },
-  deliveryInfo: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  deliveryInfoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  deliveryInfoText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
-    marginLeft: 8,
-  },
-  deliveryTimeText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 24,
   },
   actionButtons: {
     gap: 12,
@@ -1108,103 +1054,160 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#E31837',
   },
-  // Styles pour le type de livraison
-  deliveryTypeContainer: {
-    gap: 12,
+  // Styles pour l'affichage des articles
+  itemsContainer: {
+    gap: 16,
+  },
+  businessSection: {
     marginBottom: 16,
   },
-  deliveryTypeCard: {
+  businessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0f8f0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  businessTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4CAF50',
+    flex: 1,
+    marginLeft: 8,
+  },
+  businessTotal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  cartItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  itemImageContainer: {
+    marginRight: 12,
+  },
+  itemImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  itemImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemDetails: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemQuantity: {
+    fontSize: 12,
+    color: '#666',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  itemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  emptyItemsContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyItemsText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  // Styles pour la livraison programmée
+  deliveryTimeContainer: {
+    gap: 12,
+  },
+  deliveryTimeOption: {
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: '#ddd',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  deliveryTypeCardActive: {
+  deliveryTimeOptionActive: {
     borderColor: '#E31837',
     backgroundColor: '#fef2f2',
   },
-  deliveryTypeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  deliveryTypeIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deliveryTypeRadio: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deliveryTypeContent: {
-    flex: 1,
-  },
-  deliveryTypeTitle: {
+  deliveryTimeTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 4,
+    flex: 1,
   },
-  deliveryTypeTitleActive: {
+  deliveryTimeTitleActive: {
     color: '#E31837',
   },
-  deliveryTypeDescription: {
+  deliveryTimeSubtitle: {
     fontSize: 14,
     color: '#666',
   },
-  // Styles pour la sélection de date/heure
-  dateTimeSection: {
+  scheduledDeliveryContainer: {
     marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
   },
-  dateTimeHeader: {
+  scheduledInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  dateTimeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginLeft: 8,
-  },
-  dateTimeButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#f0f8f0',
+    padding: 12,
     borderRadius: 8,
-    padding: 16,
+    marginTop: 12,
+    gap: 8,
   },
-  dateTimeButtonError: {
-    borderColor: '#E31837',
-    backgroundColor: '#fef2f2',
+  scheduledInfoText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '500',
   },
-  dateTimeButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // Styles pour le sélecteur de localisation
+  locationSelectorContainer: {
+    marginVertical: 16,
   },
-  dateTimeButtonText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-    marginLeft: 12,
-    marginRight: 12,
-  },
-  dateTimeButtonTextError: {
-    color: '#E31837',
-  },
-  dateTimeErrorText: {
-    fontSize: 12,
-    color: '#E31837',
-    marginTop: 8,
-    marginLeft: 4,
+  locationSelectorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
   },
 }); 

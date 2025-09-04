@@ -5,7 +5,6 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    Image,
     Linking,
     Modal,
     ScrollView,
@@ -16,12 +15,13 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import OrderItemsList from '../../components/OrderItemsList';
 import OrdersPageSkeleton from '../../components/OrdersPageSkeleton';
 import { useOrders } from '../../hooks/useOrders';
 
 const { width } = Dimensions.get('window');
 
-type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
 
 interface OrderItem {
   id: string;
@@ -56,7 +56,7 @@ const getStatusColor = (status: OrderStatus) => {
     case 'confirmed': return '#d1ecf1';
     case 'preparing': return '#d4edda';
     case 'ready': return '#d1ecf1';
-    case 'picked_up': return '#e2e3e5';
+    case 'out_for_delivery': return '#e9d5ff';
     case 'delivered': return '#d4edda';
     case 'cancelled': return '#f8d7da';
     default: return '#f3f4f6';
@@ -69,7 +69,7 @@ const getStatusTextColor = (status: OrderStatus) => {
     case 'confirmed': return '#0c5460';
     case 'preparing': return '#155724';
     case 'ready': return '#0c5460';
-    case 'picked_up': return '#383d41';
+    case 'out_for_delivery': return '#581c87';
     case 'delivered': return '#155724';
     case 'cancelled': return '#721c24';
     default: return '#6b7280';
@@ -83,7 +83,7 @@ const StatusIcon = ({ status, size = 16 }: { status: OrderStatus; size?: number 
     case 'confirmed': return <Ionicons name="checkmark-circle-outline" size={size} color={getStatusTextColor(status)} />;
     case 'preparing': return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
     case 'ready': return <Ionicons name="checkmark-circle-outline" size={size} color={getStatusTextColor(status)} />;
-    case 'picked_up': return <Ionicons name="car-outline" size={size} color={getStatusTextColor(status)} />;
+    case 'out_for_delivery': return <Ionicons name="car-outline" size={size} color={getStatusTextColor(status)} />;
     case 'delivered': return <Ionicons name="checkmark-circle" size={size} color={getStatusTextColor(status)} />;
     case 'cancelled': return <Ionicons name="close-circle" size={size} color={getStatusTextColor(status)} />;
     default: return <Ionicons name="time-outline" size={size} color={getStatusTextColor(status)} />;
@@ -116,7 +116,7 @@ const getStatusText = (status: OrderStatus) => {
     case 'confirmed': return 'Confirmée';
     case 'preparing': return 'En préparation';
     case 'ready': return 'Prête';
-    case 'picked_up': return 'En route';
+    case 'out_for_delivery': return 'En cours de livraison';
     case 'delivered': return 'Livrée';
     case 'cancelled': return 'Annulée';
     default: return status;
@@ -137,6 +137,11 @@ export default function OrdersScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'past3months' | 'older'>('all');
 
+  // Debug: Afficher les commandes reçues
+  console.log('🔍 DEBUG - Commandes reçues du hook:', orders);
+  console.log('🔍 DEBUG - Nombre de commandes:', orders.length);
+  console.log('🔍 DEBUG - Premier ordre (si existe):', orders[0]);
+
   // Convertir les commandes vers le format local
   const localOrders: LocalOrder[] = useMemo(() => orders.map(order => ({
     id: order.id,
@@ -151,16 +156,18 @@ export default function OrdersScreen() {
       specialInstructions: item.special_instructions,
       image: item.image
     })),
-    businessName: order.business_name,
+    businessName: order.business_id ? `Business ${order.business_id}` : 'Business inconnu', // business_name n'existe pas
     deliveryAddress: order.delivery_address || '',
     deliveryMethod: order.delivery_method,
     paymentMethod: order.payment_method,
     estimatedDelivery: new Date(order.estimated_delivery || order.created_at),
-    driverName: order.driver_name,
-    driverPhone: order.driver_phone,
+    driverName: undefined, // driver_name n'existe pas
+    driverPhone: undefined, // driver_phone n'existe pas
     customer_rating: order.customer_rating,
     customer_review: order.customer_review
   })), [orders]);
+
+  console.log('🔍 DEBUG - Commandes converties:', localOrders.length);
 
   // Filter orders based on selected filter and search term
   const filteredOrders = useMemo(() => localOrders.filter((order) => {
@@ -307,6 +314,22 @@ export default function OrdersScreen() {
         <Text style={styles.itemsCount}>
           {item.items.length} {item.items.length === 1 ? 'article' : 'articles'}
         </Text>
+        
+        {/* Aperçu des items */}
+        {item.items.length > 0 && (
+          <View style={styles.itemsPreview}>
+            <OrderItemsList 
+              items={item.items.slice(0, 2)} // Afficher seulement les 2 premiers items
+              showImages={false}
+              compact={true}
+            />
+            {item.items.length > 2 && (
+              <Text style={styles.moreItemsText}>
+                +{item.items.length - 2} autres articles...
+              </Text>
+            )}
+          </View>
+        )}
       </View>
 
       <View style={styles.orderActions}>
@@ -434,14 +457,14 @@ export default function OrdersScreen() {
                 Prêtes
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.filterButton, filter === 'picked_up' && styles.filterButtonActive]}
-              onPress={() => setFilter('picked_up')}
-            >
-              <Text style={[styles.filterText, filter === 'picked_up' && styles.filterTextActive]}>
-                En route
-              </Text>
-            </TouchableOpacity>
+                         <TouchableOpacity 
+               style={[styles.filterButton, filter === 'out_for_delivery' && styles.filterButtonActive]}
+               onPress={() => setFilter('out_for_delivery')}
+             >
+               <Text style={[styles.filterText, filter === 'out_for_delivery' && styles.filterTextActive]}>
+                 En cours de livraison
+               </Text>
+             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.filterButton, filter === 'delivered' && styles.filterButtonActive]}
               onPress={() => setFilter('delivered')}
@@ -540,27 +563,11 @@ export default function OrdersScreen() {
               {/* Order Items */}
               <View style={styles.modalSection}>
                 <Text style={styles.sectionTitle}>Articles commandés</Text>
-                {selectedOrder.items.map((item, index) => (
-                  <View key={index} style={styles.itemCard}>
-                    {item.image && (
-                      <Image
-                        source={{ uri: item.image }}
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                      />
-                    )}
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                      <Text style={styles.itemQuantity}>Quantité: {item.quantity}</Text>
-                      {item.specialInstructions && (
-                        <Text style={styles.itemNote}>Note: {item.specialInstructions}</Text>
-                      )}
-                    </View>
-                    <Text style={styles.itemPrice}>
-                      {formatCurrency(item.price * item.quantity)}
-                    </Text>
-                  </View>
-                ))}
+                <OrderItemsList 
+                  items={selectedOrder.items}
+                  showImages={true}
+                  compact={false}
+                />
               </View>
 
               {/* Delivery Information */}
@@ -909,6 +916,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 16,
     marginBottom: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 1,
+    elevation: 1,
   },
   orderHeader: {
     flexDirection: 'row',
@@ -1184,5 +1196,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  itemsPreview: {
+    marginTop: 8,
+  },
+  moreItemsText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 }); 

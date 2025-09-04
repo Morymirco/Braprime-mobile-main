@@ -140,7 +140,7 @@ export default function OrderSuccessScreen() {
         {/* Numéro de commande */}
         <View style={styles.orderNumberCard}>
           <Text style={styles.orderNumberLabel}>Numéro de commande</Text>
-          <Text style={styles.orderNumber}>#{order.id}</Text>
+          <Text style={styles.orderNumber}>#{order.order_number || `CMD-${order.id.slice(0, 8).toUpperCase()}`}</Text>
         </View>
         {/* Détails de la commande */}
         <View style={styles.card}>
@@ -167,7 +167,7 @@ export default function OrderSuccessScreen() {
               {order.items.map((item, index) => (
                 <View key={index} style={styles.itemRow}>
                   <Text style={styles.itemText}><Text style={styles.itemQuantity}>{item.quantity}x</Text> {item.name}</Text>
-                  <Text style={styles.itemPrice}>{(item.price * item.quantity).toLocaleString()} GNF</Text>
+                  <Text style={styles.itemPrice}>{((item.price || 0) * (item.quantity || 0)).toLocaleString()} GNF</Text>
                 </View>
               ))}
             </View>
@@ -176,19 +176,19 @@ export default function OrderSuccessScreen() {
               <Text style={styles.summaryTitle}>Résumé du paiement</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Sous-total</Text>
-                <Text style={styles.summaryValue}>{order.total.toLocaleString()} GNF</Text>
+                <Text style={styles.summaryValue}>{(order.total || 0).toLocaleString()} GNF</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>TVA (18%)</Text>
-                <Text style={styles.summaryValue}>{order.tax.toLocaleString()} GNF</Text>
+                <Text style={styles.summaryLabel}>Frais de service (2%)</Text>
+                <Text style={styles.summaryValue}>{(order.tax || 0).toLocaleString()} GNF</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Frais de livraison</Text>
-                <Text style={styles.summaryValue}>{order.delivery_fee.toLocaleString()} GNF</Text>
+                <Text style={styles.summaryValue}>{(order.delivery_fee || 0).toLocaleString()} GNF</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{order.grand_total.toLocaleString()} GNF</Text>
+                <Text style={styles.totalValue}>{(order.grand_total || 0).toLocaleString()} GNF</Text>
               </View>
             </View>
             {/* Informations de livraison */}

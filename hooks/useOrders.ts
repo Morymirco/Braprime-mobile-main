@@ -38,14 +38,21 @@ export function useOrders(): UseOrdersReturn {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 DEBUG - Chargement des commandes pour utilisateur:', user.id);
+      
       const { orders: userOrders, error: ordersError } = await orderService.getUserOrders(user.id);
       
+      console.log('🔍 DEBUG - Réponse du service:', { userOrders, ordersError });
+      console.log('🔍 DEBUG - Nombre de commandes reçues:', userOrders?.length || 0);
+      
       if (ordersError) {
+        console.error('❌ Erreur lors du chargement des commandes:', ordersError);
         setError(ordersError);
         return;
       }
 
       setOrders(userOrders);
+      console.log('🔍 DEBUG - Commandes définies dans l\'état:', userOrders?.length || 0);
     } catch (err) {
       console.error('❌ Erreur lors du chargement des commandes:', err);
       setError(err);

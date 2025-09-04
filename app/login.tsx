@@ -37,6 +37,10 @@ export default function LoginScreen() {
     return emailRegex.test(email);
   };
 
+  const handleCreateAccount = () => {
+    router.push('/signup');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -53,6 +57,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Adresse email"
+            placeholderTextColor="#999"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -68,6 +73,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Mot de passe"
+            placeholderTextColor="#999"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -103,9 +109,9 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         {/* Lien pour créer un compte */}
-        <TouchableOpacity onPress={() => Alert.alert('Information', 'Pour créer un compte, veuillez contacter l\'administrateur.')}>
+        <TouchableOpacity onPress={handleCreateAccount}>
           <Text style={styles.switchText}>
-            Pas de compte ? <Text style={styles.switchLink}>Contacter l'administrateur</Text>
+            Pas de compte ? <Text style={styles.switchLink}>Créer un compte</Text>
           </Text>
         </TouchableOpacity>
       </View>

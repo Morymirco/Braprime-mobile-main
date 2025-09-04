@@ -1,6 +1,29 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { useCart } from '../../hooks/use-cart';
 import { AuthGuard } from '../../lib/components/AuthGuard';
+
+// Composant pour l'icône du panier avec badge
+function CartIconWithBadge({ color }: { color: string }) {
+  const { currentCart } = useCart();
+  
+  // Calculer la quantité totale d'articles (pas le nombre d'articles uniques)
+  const totalQuantity = currentCart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  
+  return (
+    <View style={styles.iconContainer}>
+      <MaterialIcons name="shopping-cart" size={24} color={color} />
+      {totalQuantity > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {totalQuantity > 99 ? '99+' : totalQuantity}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -38,7 +61,7 @@ export default function TabLayout() {
           options={{
             title: 'Cart',
             tabBarIcon: ({ color }) => (
-              <MaterialIcons name="shopping-cart" size={24} color={color} />
+              <CartIconWithBadge color={color} />
             ),
           }}
         />
@@ -55,3 +78,28 @@ export default function TabLayout() {
     </AuthGuard>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#E31837',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+});

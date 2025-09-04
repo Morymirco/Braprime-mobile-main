@@ -28,7 +28,7 @@ export default function BusinessTypesGrid({
       'bookstore': 'Librairie',
       'document_service': 'Documents'
     };
-    return nameMap[name] || name.charAt(0).toUpperCase() + name.slice(1);
+    return nameMap[name] || (name ? name.charAt(0).toUpperCase() + name.slice(1) : 'Service');
   };
 
   // Fonction pour obtenir le badge selon le type

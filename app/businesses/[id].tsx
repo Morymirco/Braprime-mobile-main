@@ -17,9 +17,9 @@ import BusinessDetailSkeleton from '../../components/BusinessDetailSkeleton';
 import MenuItemDetail from '../../components/MenuItemDetail';
 import MenuSkeleton from '../../components/MenuSkeleton';
 import ToastContainer from '../../components/ToastContainer';
+import { useCart } from '../../hooks/use-cart';
 import { useBusiness } from '../../hooks/useBusiness';
 import { useBusinessReview } from '../../hooks/useBusinessReview';
-import { useCart } from '../../hooks/useCart';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../hooks/useMenu';
 import { useToast } from '../../hooks/useToast';
@@ -671,11 +671,11 @@ export default function BusinessDetailScreen() {
                     <View style={styles.reviewUserInfo}>
                       <View style={styles.reviewUserAvatar}>
                         <Text style={styles.reviewUserInitial}>
-                          {review.user_name.charAt(0).toUpperCase()}
+                          {review.user_name ? review.user_name.charAt(0).toUpperCase() : 'U'}
                         </Text>
                       </View>
                       <View style={styles.reviewUserDetails}>
-                        <Text style={styles.reviewUserName}>{review.user_name}</Text>
+                        <Text style={styles.reviewUserName}>{review.user_name || 'Utilisateur'}</Text>
                         <Text style={styles.reviewDate}>
                           {new Date(review.created_at).toLocaleDateString('fr-FR', {
                             day: 'numeric',
@@ -737,7 +737,8 @@ export default function BusinessDetailScreen() {
         item={selectedMenuItem}
         visible={modalVisible}
         onClose={handleCloseModal}
-        onAddToCart={handleAddToCart}
+        businessId={business?.id}
+        businessName={business?.name}
       />
     </SafeAreaView>
   );

@@ -53,7 +53,7 @@ export default function HomeScreen() {
       'bookstore': 'Librairie',
       'document_service': 'Documents'
     };
-    return nameMap[name] || name.charAt(0).toUpperCase() + name.slice(1);
+    return nameMap[name] || (name ? name.charAt(0).toUpperCase() + name.slice(1) : 'Service');
   };
 
   const handleBusinessTypePress = (businessType: BusinessType) => {

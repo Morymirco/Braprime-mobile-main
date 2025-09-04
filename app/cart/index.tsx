@@ -11,13 +11,12 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartSkeleton from '../../components/CartSkeleton';
-import SyncStatus from '../../components/SyncStatus';
 import ToastContainer from '../../components/ToastContainer';
-import { useCart } from '../../hooks/useCart';
+import { useCart } from '../../hooks/use-cart';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../lib/contexts/AuthContext';
 import { MenuItemWithCategory } from '../../lib/services/MenuService';
@@ -462,10 +461,13 @@ export default function CartScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Mon Panier</Text>
-          <SyncStatus showDetails={false} />
         </View>
         <Text style={styles.subtitle}>
-          {getItemCount()} article{getItemCount() !== 1 ? 's' : ''} • {cart?.business_name}
+          {getItemCount()} article{getItemCount() !== 1 ? 's' : ''} • {
+            cart?.is_multi_service && cart.businesses && cart.businesses.length > 0 
+              ? `${cart.businesses.length} service${cart.businesses.length > 1 ? 's' : ''}`
+              : cart?.business_name || 'Service'
+          }
         </Text>
       </View>
 
@@ -483,7 +485,88 @@ export default function CartScreen() {
       >
         {/* Articles du panier */}
         <View style={styles.itemsContainer}>
-          {cart?.items.map((item) => {
+          {(() => {
+            // Log de débogage pour voir la structure du panier
+            console.log('🛒 Structure du panier:', {
+              isMultiService: cart?.is_multi_service,
+              businesses: cart?.businesses,
+              totalItems: cart?.items?.length,
+              items: cart?.items?.map(item => ({
+                id: item.id,
+                name: item.name,
+                business_id: item.business_id,
+                business_name: item.business_name,
+                price: item.price,
+                quantity: item.quantity
+              })),
+              businessesDetails: cart?.businesses?.map(business => ({
+                id: business.id,
+                name: business.name,
+                item_count: business.item_count,
+                total: business.total
+              }))
+            });
+            
+            if (cart?.is_multi_service && cart.businesses && cart.businesses.length > 0) {
+              // Affichage multi-services organisé par business
+              return cart.businesses.map((business) => (
+                <View key={business.id} style={styles.businessSection}>
+                  {/* En-tête du business */}
+                  <View style={styles.businessHeader}>
+                    <View style={styles.businessInfo}>
+                      <MaterialIcons name="store" size={20} color="#E31837" />
+                      <Text style={styles.businessName}>{business.name}</Text>
+                    </View>
+                    <View style={styles.businessSummary}>
+                      <Text style={styles.businessItemCount}>
+                        {business.item_count} article{business.item_count !== 1 ? 's' : ''}
+                      </Text>
+                      <Text style={styles.businessTotal}>
+                        {business.total.toLocaleString()} GNF
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Articles de ce business */}
+                  {(() => {
+                    // Pour le panier multi-service, filtrer les articles par business
+                    const businessItems = cart.items && cart.items.length > 0 ? 
+                      cart.items.filter(item => {
+                        // Log détaillé pour chaque article
+                        console.log(`🔍 Article "${item.name}":`, {
+                          itemBusinessId: item.business_id,
+                          itemBusinessName: item.business_name,
+                          businessId: business.id,
+                          businessName: business.name
+                        });
+                        
+                        // Vérifier si l'article appartient à ce business
+                        const matches = item.business_id === business.id;
+                        
+                        if (matches) {
+                          console.log(`✅ Match: ${item.name} -> ${business.name}`);
+                        } else {
+                          console.log(`❌ Pas de match: ${item.name} (${item.business_id}) -> ${business.name} (${business.id})`);
+                        }
+                        
+                        return matches;
+                      }) : [];
+                    
+                    console.log(`📦 Business "${business.name}" (ID: ${business.id}):`, {
+                      totalItems: cart.items?.length || 0,
+                      filteredItems: businessItems.length,
+                      businessItems: businessItems.map(item => ({ id: item.id, name: item.name, business_id: item.business_id, business_name: item.business_name }))
+                    });
+                    
+                    if (businessItems.length === 0) {
+                      return (
+                        <View style={styles.noItemsContainer}>
+                          <Text style={styles.noItemsText}>Aucun article trouvé pour ce service</Text>
+                        </View>
+                      );
+                    }
+                    
+                    return businessItems.map((item) => {
             const isUpdatingQuantity = loadingStates.updateQuantity[item.id];
             const isRemoving = loadingStates.removeFromCart[item.id];
             
@@ -506,7 +589,7 @@ export default function CartScreen() {
                     <Text style={styles.itemName}>{item.name}</Text>
                     <TouchableOpacity
                       onPress={(e) => {
-                        e.stopPropagation(); // Empêcher l'ouverture du modal
+                                  e.stopPropagation();
                         handleRemoveItem(item.id, item.name);
                       }}
                       style={[
@@ -541,7 +624,7 @@ export default function CartScreen() {
                           item.quantity <= 1 && styles.quantityButtonDisabled
                         ]}
                         onPress={(e) => {
-                          e.stopPropagation(); // Empêcher l'ouverture du modal
+                                    e.stopPropagation();
                           handleQuantityChange(item.id, item.quantity - 1);
                         }}
                         disabled={item.quantity <= 1}
@@ -560,7 +643,7 @@ export default function CartScreen() {
                       <TouchableOpacity
                         style={styles.quantityButton}
                         onPress={(e) => {
-                          e.stopPropagation(); // Empêcher l'ouverture du modal
+                                    e.stopPropagation();
                           handleQuantityChange(item.id, item.quantity + 1);
                         }}
                       >
@@ -575,7 +658,119 @@ export default function CartScreen() {
                 </View>
               </TouchableOpacity>
             );
-          })}
+                    });
+                  })()}
+                </View>
+              ));
+            } else {
+              // Affichage simple pour un seul service
+              if (cart?.items && cart.items.length > 0) {
+                return cart.items.map((item) => {
+                  const isUpdatingQuantity = loadingStates.updateQuantity[item.id];
+                  const isRemoving = loadingStates.removeFromCart[item.id];
+                  
+                  return (
+                    <TouchableOpacity 
+                      key={item.id} 
+                      style={styles.itemCard}
+                      onPress={() => handleMenuItemPress(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={{
+                          uri: item.image || 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=200&q=80'
+                        }}
+                        style={styles.itemImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.itemContent}>
+                        <View style={styles.itemHeader}>
+                          <Text style={styles.itemName}>{item.name}</Text>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleRemoveItem(item.id, item.name);
+                            }}
+                            style={[
+                              styles.removeButton,
+                              isRemoving && styles.removeButtonLoading
+                            ]}
+                            disabled={isRemoving}
+                          >
+                            {isRemoving ? (
+                              <MaterialIcons name="hourglass-empty" size={20} color="#CCC" />
+                            ) : (
+                              <MaterialIcons name="delete-outline" size={20} color="#E31837" />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                        
+                        {item.special_instructions && (
+                          <Text style={styles.itemInstructions} numberOfLines={2}>
+                            {item.special_instructions}
+                          </Text>
+                        )}
+
+                        <View style={styles.itemFooter}>
+                          <Text style={styles.itemPrice}>
+                            {(item.price * item.quantity).toLocaleString()} GNF
+                          </Text>
+                          
+                          <View style={styles.quantityContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.quantityButton,
+                                item.quantity <= 1 && styles.quantityButtonDisabled
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleQuantityChange(item.id, item.quantity - 1);
+                              }}
+                              disabled={item.quantity <= 1}
+                            >
+                              <MaterialIcons 
+                                name="remove" 
+                                size={20} 
+                                color={item.quantity <= 1 ? "#CCC" : "#E31837"} 
+                              />
+                            </TouchableOpacity>
+                            
+                            <Text style={styles.quantityText}>
+                              {item.quantity}
+                            </Text>
+                            
+                            <TouchableOpacity
+                              style={styles.quantityButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleQuantityChange(item.id, item.quantity + 1);
+                              }}
+                            >
+                              <MaterialIcons 
+                                name="add" 
+                                size={20} 
+                                color="#E31837" 
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                });
+              } else {
+                return (
+                  <View style={styles.emptyCartContainer}>
+                    <MaterialIcons name="shopping-cart-outline" size={64} color="#CCC" />
+                    <Text style={styles.emptyCartTitle}>Votre panier est vide</Text>
+                    <Text style={styles.emptyCartSubtitle}>
+                      Ajoutez des articles pour commencer vos achats
+                    </Text>
+                  </View>
+                );
+              }
+            }
+          })()}
         </View>
 
         {/* Actions */}
@@ -1169,6 +1364,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 12,
   },
   promoInput: {
     flex: 1,
@@ -1217,5 +1413,68 @@ const styles = StyleSheet.create({
   promoDiscountValue: {
     fontWeight: 'bold',
     color: '#E31837',
+  },
+  businessSection: {
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  businessHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  businessInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  businessName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginLeft: 8,
+  },
+  businessSummary: {
+    alignItems: 'flex-end',
+  },
+  businessItemCount: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  businessTotal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#E31837',
+  },
+  noItemsContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noItemsText: {
+    fontSize: 16,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  emptyCartContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyCartTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyCartSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
   },
 }); 

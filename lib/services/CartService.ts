@@ -18,6 +18,8 @@ export interface CartItem {
   quantity: number;
   image?: string;
   special_instructions?: string;
+  business_id?: number; // Ajouté pour associer l'article à son business
+  business_name?: string; // Ajouté pour associer l'article à son business
   created_at: string;
   updated_at: string;
 }
@@ -25,17 +27,26 @@ export interface CartItem {
 export interface Cart {
   id: string;
   user_id: string;
-  business_id: number;
-  business_name: string;
+  business_id?: number;
+  business_name?: string;
+  business_delivery_fee?: number;
   delivery_method: 'delivery' | 'pickup';
   delivery_address?: string;
   delivery_instructions?: string;
-  delivery_fee?: number;
   created_at: string;
   updated_at: string;
   items: CartItem[];
-  total: number;
-  item_count: number;
+  total?: number;
+  item_count?: number;
+  // Propriétés pour les paniers multi-services
+  is_multi_service?: boolean;
+  business_count?: number;
+  businesses?: Array<{
+    id: number;
+    name: string;
+    item_count: number;
+    total: number;
+  }>;
 }
 
 export interface AddToCartItem {
@@ -71,22 +82,162 @@ export interface UpdateCartItemData {
 
 export class CartService {
   /**
-   * Récupérer le panier complet d'un utilisateur
+   * Récupérer tous les paniers d'un utilisateur (un par service)
    */
-  static async getCart(userId: string): Promise<{ cart: Cart | null; error: string | null }> {
+  static async getAllCarts(userId: string): Promise<{ carts: Cart[]; error: string | null }> {
     try {
-      // Récupérer le panier principal avec les détails calculés
+      console.log('🔍 getAllCarts appelé pour userId:', userId);
+      
+      // Récupérer tous les paniers de l'utilisateur
       const { data: cartData, error: cartError } = await supabase
-        .from('cart_details')
-        .select('*')
+        .from('cart')
+        .select(`
+          id,
+          user_id,
+          business_id,
+          delivery_method,
+          delivery_address,
+          delivery_instructions,
+          created_at,
+          updated_at,
+          businesses (
+            id,
+            name,
+            delivery_fee,
+            business_types (name)
+          )
+        `)
         .eq('user_id', userId)
-        .single();
+        .order('created_at', { ascending: false });
 
       if (cartError) {
-        if (cartError.code === 'PGRST116') {
-          // Aucun panier trouvé, c'est normal
-          return { cart: null, error: null };
+        console.error('❌ Erreur lors de la récupération des paniers:', cartError);
+        return { carts: [], error: cartError.message };
+      }
+
+      console.log('📦 Carts trouvés:', cartData?.length || 0, cartData);
+
+      if (!cartData || cartData.length === 0) {
+        console.log('⚠️ Aucun cart trouvé pour userId:', userId);
+        return { carts: [], error: null };
+      }
+
+      // Pour chaque panier, récupérer ses articles
+      const carts: Cart[] = [];
+      
+      for (const cart of cartData) {
+        console.log('🔍 Récupération des items pour cart:', cart.id);
+        
+        const { data: cartItems, error: itemsError } = await supabase
+          .from('cart_items')
+          .select(`
+            *,
+            menu_items (
+              *,
+              businesses (
+                id,
+                name,
+                delivery_fee,
+                business_types (name)
+              )
+            )
+          `)
+          .eq('cart_id', cart.id);
+
+        if (itemsError) {
+          console.error(`❌ Erreur lors de la récupération des articles du panier ${cart.id}:`, itemsError);
+          continue;
         }
+
+        console.log('📦 Items trouvés pour cart', cart.id, ':', cartItems?.length || 0, cartItems);
+
+        // Calculer le total et le nombre d'articles
+        let total = 0;
+        let itemCount = 0;
+        const items = cartItems?.map(item => {
+          total += item.price * item.quantity;
+          itemCount += item.quantity; // Somme des quantités, pas le nombre d'articles uniques
+          return {
+            id: item.id,
+            cart_id: item.cart_id,
+            menu_item_id: item.menu_item_id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            special_instructions: item.special_instructions,
+            business_id: cart.business_id, // Ajouté: associer l'article à son business
+            business_name: (cart.businesses as any)?.name || '', // Ajouté: associer l'article à son business
+            created_at: item.created_at,
+            updated_at: item.updated_at
+          };
+        }) || [];
+
+        const cartObj: Cart = {
+          id: cart.id,
+          user_id: cart.user_id,
+          business_id: cart.business_id || 0,
+          business_name: (cart.businesses as any)?.name || '',
+          business_delivery_fee: (cart.businesses as any)?.delivery_fee || 0,
+          delivery_method: cart.delivery_method || 'delivery',
+          delivery_address: cart.delivery_address || '',
+          delivery_instructions: cart.delivery_instructions || '',
+          created_at: cart.created_at,
+          updated_at: cart.updated_at,
+          items: items,
+          total: total,
+          item_count: itemCount,
+          is_multi_service: false, // Un seul service par panier
+          business_count: 1,
+          businesses: cart.business_id ? [{
+            id: cart.business_id,
+            name: (cart.businesses as any)?.name || '',
+            item_count: items.length,
+            total: total
+          }] : []
+        };
+
+        carts.push(cartObj);
+      }
+
+      console.log('✅ getAllCarts terminé. Carts retournés:', carts.length, carts);
+      return { carts, error: null };
+    } catch (error) {
+      console.error('Erreur lors de la récupération des paniers:', error);
+      return { carts: [], error: 'Erreur lors de la récupération des paniers' };
+    }
+  }
+
+  /**
+   * Récupérer un panier spécifique d'un utilisateur (par business_id)
+   */
+  static async getCartByBusiness(userId: string, businessId: number): Promise<{ cart: Cart | null; error: string | null }> {
+    try {
+      // Récupérer le panier spécifique au business
+      const { data: cartData, error: cartError } = await supabase
+        .from('cart')
+        .select(`
+          id,
+          user_id,
+          business_id,
+          delivery_method,
+          delivery_address,
+          delivery_instructions,
+          created_at,
+          updated_at,
+          businesses (
+            id,
+            name,
+            delivery_fee,
+            business_types (name)
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (cartError) {
+        console.error('Erreur lors de la récupération du panier:', cartError);
         return { cart: null, error: cartError.message };
       }
 
@@ -94,21 +245,72 @@ export class CartService {
         return { cart: null, error: null };
       }
 
-      // Construire l'objet cart complet
+      // Récupérer les articles du panier
+      const { data: cartItems, error: itemsError } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          menu_items (
+            *,
+            businesses (
+              id,
+              name,
+              delivery_fee,
+              business_types (name)
+            )
+          )
+        `)
+        .eq('cart_id', cartData.id);
+
+      if (itemsError) {
+        console.error('Erreur lors de la récupération des articles du panier:', itemsError);
+        return { cart: null, error: itemsError.message };
+      }
+
+      // Calculer le total et le nombre d'articles
+      let total = 0;
+      let itemCount = 0;
+      const items = cartItems?.map(item => {
+        total += item.price * item.quantity;
+        itemCount += item.quantity; // Somme des quantités, pas le nombre d'articles uniques
+        return {
+          id: item.id,
+          cart_id: item.cart_id,
+          menu_item_id: item.menu_item_id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          special_instructions: item.special_instructions,
+          business_id: cartData.business_id,
+          business_name: (cartData.businesses as any)?.name || '',
+          created_at: item.created_at,
+          updated_at: item.updated_at
+        };
+      }) || [];
+
       const cart: Cart = {
-        id: cartData.cart_id,
+        id: cartData.id,
         user_id: cartData.user_id,
         business_id: cartData.business_id,
-        business_name: cartData.business_name,
-        delivery_method: cartData.delivery_method,
-        delivery_address: cartData.delivery_address,
-        delivery_instructions: cartData.delivery_instructions,
-        delivery_fee: cartData.delivery_fee,
+        business_name: (cartData.businesses as any)?.name || '',
+        business_delivery_fee: (cartData.businesses as any)?.delivery_fee || 0,
+        delivery_method: cartData.delivery_method || 'delivery',
+        delivery_address: cartData.delivery_address || '',
+        delivery_instructions: cartData.delivery_instructions || '',
         created_at: cartData.created_at,
         updated_at: cartData.updated_at,
-        items: cartData.items || [],
-        total: cartData.total,
-        item_count: cartData.item_count
+        items: items,
+        total: total,
+        item_count: itemCount,
+        is_multi_service: false,
+        business_count: 1,
+        businesses: cartData.business_id ? [{
+          id: cartData.business_id,
+          name: (cartData.businesses as any)?.name || '',
+          item_count: items.length,
+          total: total
+        }] : []
       };
 
       return { cart, error: null };
@@ -119,24 +321,177 @@ export class CartService {
   }
 
   /**
-   * Créer un nouveau panier pour un utilisateur
+   * Récupérer le panier complet d'un utilisateur (méthode existante pour compatibilité)
    */
-  static async createCart(userId: string, businessId: number, businessName: string): Promise<{ cartId: string | null; error: string | null }> {
+  static async getCart(userId: string): Promise<{ cart: Cart | null; error: string | null }> {
     try {
+      // Utiliser getAllCarts pour récupérer tous les paniers
+      const { carts, error } = await this.getAllCarts(userId);
+      
+      if (error) {
+        return { cart: null, error };
+      }
+
+      if (!carts || carts.length === 0) {
+        return { cart: null, error: null };
+      }
+
+      // Si un seul panier, le retourner directement
+      if (carts.length === 1) {
+        return { cart: carts[0], error: null };
+      }
+
+      // Si plusieurs paniers, créer un panier global (comme dans le client)
+      const totalItems = carts.reduce((sum, cart) => sum + (cart.item_count || 0), 0);
+      const totalAmount = carts.reduce((sum, cart) => sum + (cart.total || 0), 0);
+
+      const globalCart: Cart = {
+        id: 'global',
+        user_id: userId,
+        business_id: undefined,
+        business_name: 'Multi-services',
+        business_delivery_fee: 0,
+        delivery_method: 'delivery',
+        delivery_address: '',
+        delivery_instructions: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        items: carts.flatMap(cart => 
+          (cart.items || []).map(item => ({
+            ...item,
+            business_id: cart.business_id,
+            business_name: cart.business_name
+          }))
+        ),
+        total: totalAmount,
+        item_count: totalItems,
+        is_multi_service: true,
+        business_count: carts.length,
+        businesses: carts.map(cart => ({
+          id: cart.business_id || 0,
+          name: cart.business_name || '',
+          item_count: cart.item_count || 0,
+          total: cart.total || 0
+        }))
+      };
+
+      return { cart: globalCart, error: null };
+    } catch (error) {
+      console.error('Erreur lors de la récupération du panier:', error);
+      return { cart: null, error: 'Erreur lors de la récupération du panier' };
+    }
+  }
+
+  /**
+   * Créer un nouveau panier pour un utilisateur (seulement si nécessaire)
+   */
+  static async createCart(userId: string, businessId?: number): Promise<{ cartId: string | null; error: string | null }> {
+    try {
+      // Vérifier que l'utilisateur est authentifié
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.error('Erreur d\'authentification:', authError);
+        return { cartId: null, error: 'Utilisateur non authentifié' };
+      }
+
+      // Vérifier que l'utilisateur correspond
+      if (user.id !== userId) {
+        console.error('ID utilisateur ne correspond pas');
+        return { cartId: null, error: 'ID utilisateur invalide' };
+      }
+
+      // Vérifier d'abord si un panier existe déjà pour cet utilisateur ET ce business
+      let query = supabase
+        .from('cart')
+        .select('id, created_at')
+        .eq('user_id', userId);
+      
+      // Ajouter la condition business_id seulement si businessId est défini
+      if (businessId && businessId > 0) {
+        query = query.eq('business_id', businessId);
+      } else {
+        query = query.is('business_id', null);
+      }
+      
+      const { data: existingCarts, error: checkError } = await query;
+      
+      if (checkError) {
+        console.error('Erreur lors de la vérification du panier existant:', checkError);
+        return { cartId: null, error: checkError.message };
+      }
+      
+      // Gérer le cas où il y a plusieurs paniers (doublons)
+      let existingCart = null;
+      if (existingCarts && existingCarts.length > 0) {
+        if (existingCarts.length === 1) {
+          existingCart = existingCarts[0];
+        } else {
+          // Il y a des doublons, nettoyer automatiquement
+          console.warn(`Doublons détectés pour user_id=${userId}, business_id=${businessId}. Nettoyage automatique...`);
+          
+          // Garder le cart le plus récent
+          existingCarts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          existingCart = existingCarts[0];
+          
+          // Supprimer les autres carts
+          for (let i = 1; i < existingCarts.length; i++) {
+            await supabase
+              .from('cart')
+              .delete()
+              .eq('id', existingCarts[i].id);
+          }
+          
+          console.log(`${existingCarts.length - 1} doublons supprimés`);
+        }
+      }
+
+      // Si un panier existe déjà pour ce business, retourner son ID
+      if (existingCart) {
+        console.log(`Panier existant trouvé pour business ${businessId}: ${existingCart.id}`);
+        return { cartId: existingCart.id, error: null };
+      }
+
+      // Préparer les données d'insertion
+      const insertData: any = {
+          user_id: userId,
+          delivery_method: 'delivery'
+      };
+
+      // Logique intelligente pour business_id
+      if (businessId && businessId > 0) {
+        // Vérifier que le business existe et est actif
+        const { data: businessExists, error: businessError } = await supabase
+          .from('businesses')
+          .select('id, is_active')
+          .eq('id', businessId)
+          .eq('is_active', true)
+          .single();
+
+        if (businessError) {
+          console.warn(`Business ${businessId} non trouvé ou inactif:`, businessError.message);
+          // On continue sans business_id (sera NULL)
+        } else if (businessExists) {
+          insertData.business_id = businessId;
+          console.log(`Panier créé avec business_id: ${businessId}`);
+        }
+      } else {
+        console.log('Panier créé sans business_id (panier général)');
+      }
+
+      // Créer le nouveau panier
       const { data, error } = await supabase
         .from('cart')
-        .insert({
-          user_id: userId,
-          business_id: businessId,
-          business_name: businessName
-        })
+        .insert(insertData)
         .select('id')
         .single();
 
       if (error) {
+        console.error('Erreur lors de la création du panier:', error);
         return { cartId: null, error: error.message };
       }
 
+      console.log(`Nouveau panier créé: ${data.id}`);
       return { cartId: data.id, error: null };
     } catch (error) {
       console.error('Erreur lors de la création du panier:', error);
@@ -145,49 +500,65 @@ export class CartService {
   }
 
   /**
-   * Ajouter un article au panier
+   * Ajouter un article au panier spécifique d'un service
    */
   static async addToCart(
     userId: string, 
     item: AddToCartItem, 
-    businessId: number, 
-    businessName: string
-  ): Promise<{ success: boolean; error: string | null }> {
+    businessId: number
+  ): Promise<{ success: boolean; error: string | null; cart: Cart | null }> {
     try {
-      // Vérifier si l'utilisateur a déjà un panier
-      let { cart } = await this.getCart(userId);
-      
-      // Si pas de panier, en créer un nouveau
-      if (!cart) {
-        const { cartId, error: createError } = await this.createCart(userId, businessId, businessName);
+      // Créer ou récupérer le panier spécifique au business
+      const { cartId, error: createError } = await this.createCart(userId, businessId);
         if (createError) {
-          return { success: false, error: createError };
-        }
+        return { success: false, error: createError, cart: null };
+      }
         
-        // Récupérer le nouveau panier
-        const result = await this.getCart(userId);
-        cart = result.cart;
-        if (!cart) {
-          return { success: false, error: 'Erreur lors de la création du panier' };
-        }
+      if (!cartId) {
+        return { success: false, error: 'Impossible de créer ou récupérer le panier', cart: null };
+      }
+
+      // Récupérer l'ID du panier spécifique au business
+      const { data: cartData, error: cartError } = await supabase
+        .from('cart')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (cartError || !cartData) {
+        console.error('Erreur lors de la récupération du panier:', cartError);
+        return { success: false, error: 'Panier non trouvé', cart: null };
       }
 
       // Vérifier si l'article existe déjà dans le panier
-      const existingItem = cart.items.find(cartItem => 
-        cartItem.menu_item_id === item.menu_item_id && 
-        cartItem.name === item.name
-      );
+      const { data: existingItem } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('cart_id', cartData.id)
+        .eq('menu_item_id', item.menu_item_id)
+        .maybeSingle();
 
       if (existingItem) {
-        // Mettre à jour la quantité
-        return await this.updateQuantity(existingItem.id, existingItem.quantity + item.quantity);
-      }
+        // Mettre à jour la quantité de l'article existant
+        const { error: updateError } = await supabase
+          .from('cart_items')
+          .update({
+            quantity: existingItem.quantity + item.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingItem.id);
 
+        if (updateError) {
+          console.error('Erreur lors de la mise à jour de la quantité:', updateError);
+          return { success: false, error: updateError.message, cart: null };
+        }
+      } else {
       // Ajouter le nouvel article
-      const { error } = await supabase
+        const { error: insertError } = await supabase
         .from('cart_items')
         .insert({
-          cart_id: cart.id,
+            cart_id: cartData.id,
           menu_item_id: item.menu_item_id,
           name: item.name,
           price: item.price,
@@ -196,99 +567,233 @@ export class CartService {
           special_instructions: item.special_instructions
         });
 
-      if (error) {
-        return { success: false, error: error.message };
+        if (insertError) {
+          console.error('Erreur lors de l\'ajout de l\'article:', insertError);
+          return { success: false, error: insertError.message, cart: null };
+        }
       }
 
-      return { success: true, error: null };
+      // Récupérer le panier mis à jour
+      const { cart: updatedCart } = await this.getCartByBusiness(userId, businessId);
+      
+      return { success: true, error: null, cart: updatedCart };
     } catch (error) {
       console.error('Erreur lors de l\'ajout au panier:', error);
-      return { success: false, error: 'Erreur lors de l\'ajout au panier' };
+      return { success: false, error: 'Erreur lors de l\'ajout au panier', cart: null };
     }
   }
 
   /**
    * Mettre à jour la quantité d'un article
    */
-  static async updateQuantity(itemId: string, quantity: number): Promise<{ success: boolean; error: string | null }> {
+  static async updateQuantity(itemId: string, quantity: number): Promise<{ success: boolean; error: string | null; cart: Cart | null }> {
     try {
-      if (quantity <= 0) {
-        // Si quantité <= 0, supprimer l'article
-        return await this.removeFromCart(itemId);
+      // Récupérer l'utilisateur et le cart à partir de l'item
+      const { data: cartItem, error: fetchError } = await supabase
+        .from('cart_items')
+        .select(`
+          cart_id,
+          cart:cart(user_id)
+        `)
+        .eq('id', itemId)
+        .maybeSingle();
+
+      if (fetchError || !cartItem) {
+        return { success: false, error: 'Article non trouvé', cart: null };
       }
 
+      const userId = (cartItem.cart as any)?.user_id;
+      const cartId = cartItem.cart_id;
+
+      if (!userId) {
+        return { success: false, error: 'Utilisateur non trouvé', cart: null };
+      }
+
+      if (quantity <= 0) {
+        // Supprimer l'article et vérifier si le cart devient vide
+        const { error: deleteError } = await supabase
+          .from('cart_items')
+          .delete()
+          .eq('id', itemId);
+
+        if (deleteError) {
+          console.error('Erreur lors de la suppression de l\'article:', deleteError);
+          return { success: false, error: deleteError.message, cart: null };
+        }
+
+        // Vérifier si le cart est maintenant vide
+        const { data: remainingItems, error: checkError } = await supabase
+          .from('cart_items')
+          .select('id')
+          .eq('cart_id', cartId);
+
+        if (checkError) {
+          console.error('Erreur lors de la vérification des articles restants:', checkError);
+        } else if (!remainingItems || remainingItems.length === 0) {
+          // Le cart est vide, le supprimer
+          console.log(`Cart ${cartId} est vide, suppression...`);
+          const { error: cartDeleteError } = await supabase
+            .from('cart')
+            .delete()
+            .eq('id', cartId);
+
+          if (cartDeleteError) {
+            console.error('Erreur lors de la suppression du cart vide:', cartDeleteError);
+          } else {
+            console.log(`✅ Cart ${cartId} supprimé car vide`);
+          }
+        }
+      } else {
+        // Mettre à jour la quantité
       const { error } = await supabase
         .from('cart_items')
-        .update({ quantity })
+          .update({
+            quantity: quantity,
+            updated_at: new Date().toISOString()
+          })
         .eq('id', itemId);
 
       if (error) {
-        return { success: false, error: error.message };
+          console.error('Erreur lors de la mise à jour de la quantité:', error);
+          return { success: false, error: error.message, cart: null };
+        }
       }
 
-      return { success: true, error: null };
+      // Récupérer le panier mis à jour en utilisant getAllCarts
+      const { carts } = await this.getAllCarts(userId);
+      const updatedCart = carts.length > 0 ? carts[0] : null;
+      return { success: true, error: null, cart: updatedCart };
     } catch (error) {
       console.error('Erreur lors de la mise à jour de la quantité:', error);
-      return { success: false, error: 'Erreur lors de la mise à jour de la quantité' };
+      return { success: false, error: 'Erreur lors de la mise à jour de la quantité', cart: null };
     }
   }
 
   /**
    * Supprimer un article du panier
    */
-  static async removeFromCart(itemId: string): Promise<{ success: boolean; error: string | null }> {
+  static async removeFromCart(itemId: string): Promise<{ success: boolean; error: string | null; cart: Cart | null }> {
     try {
-      const { error } = await supabase
+      // Récupérer l'ID de l'utilisateur et du cart avant de supprimer
+      const { data: cartItem, error: fetchError } = await supabase
+        .from('cart_items')
+        .select(`
+          cart_id,
+          cart:cart(user_id)
+        `)
+        .eq('id', itemId)
+        .maybeSingle();
+
+      if (fetchError || !cartItem) {
+        return { success: false, error: 'Article non trouvé', cart: null };
+      }
+
+      const userId = (cartItem.cart as any)?.user_id;
+      const cartId = cartItem.cart_id;
+
+      if (!userId) {
+        return { success: false, error: 'Utilisateur non trouvé', cart: null };
+      }
+
+      // Supprimer l'article directement
+      const { error: deleteError } = await supabase
         .from('cart_items')
         .delete()
         .eq('id', itemId);
 
-      if (error) {
-        return { success: false, error: error.message };
+      if (deleteError) {
+        console.error('Erreur lors de la suppression de l\'article:', deleteError);
+        return { success: false, error: deleteError.message, cart: null };
       }
 
-      return { success: true, error: null };
+      // Vérifier si le cart est maintenant vide
+      const { data: remainingItems, error: checkError } = await supabase
+        .from('cart_items')
+        .select('id')
+        .eq('cart_id', cartId);
+
+      if (checkError) {
+        console.error('Erreur lors de la vérification des articles restants:', checkError);
+      } else if (!remainingItems || remainingItems.length === 0) {
+        // Le cart est vide, le supprimer
+        console.log(`Cart ${cartId} est vide, suppression...`);
+        const { error: cartDeleteError } = await supabase
+          .from('cart')
+          .delete()
+          .eq('id', cartId);
+
+        if (cartDeleteError) {
+          console.error('Erreur lors de la suppression du cart vide:', cartDeleteError);
+        } else {
+          console.log(`✅ Cart ${cartId} supprimé car vide`);
+        }
+      }
+
+      // Récupérer les paniers mis à jour
+      const { carts } = await this.getAllCarts(userId);
+      const updatedCart = carts.length > 0 ? carts[0] : null;
+      return { success: true, error: null, cart: updatedCart };
     } catch (error) {
-      console.error('Erreur lors de la suppression du panier:', error);
-      return { success: false, error: 'Erreur lors de la suppression du panier' };
+      console.error('Erreur lors de la suppression de l\'article:', error);
+      return { success: false, error: 'Erreur lors de la suppression de l\'article', cart: null };
     }
   }
 
   /**
    * Vider le panier d'un utilisateur
    */
-  static async clearCart(userId: string): Promise<{ success: boolean; error: string | null }> {
+  static async clearCart(userId: string): Promise<{ success: boolean; error: string | null; cart: Cart | null }> {
     try {
-      // Récupérer le panier
-      const { cart } = await this.getCart(userId);
-      if (!cart) {
-        return { success: true, error: null }; // Pas de panier à vider
-      }
-
-      // Supprimer tous les articles
+      // Récupérer tous les paniers de l'utilisateur
+      const { carts } = await this.getAllCarts(userId);
+      
+      // Vider tous les paniers
+      for (const cart of carts) {
+        // Supprimer d'abord tous les cart_items
       const { error: itemsError } = await supabase
         .from('cart_items')
         .delete()
         .eq('cart_id', cart.id);
 
       if (itemsError) {
-        return { success: false, error: itemsError.message };
+          console.error(`Erreur lors du vidage des items du panier ${cart.id}:`, itemsError);
       }
 
-      // Supprimer le panier
+        // Supprimer ensuite le cart lui-même
       const { error: cartError } = await supabase
         .from('cart')
         .delete()
         .eq('id', cart.id);
 
       if (cartError) {
-        return { success: false, error: cartError.message };
+          console.error(`Erreur lors de la suppression du panier ${cart.id}:`, cartError);
+        } else {
+          console.log(`✅ Panier ${cart.id} supprimé avec succès`);
+        }
       }
 
-      return { success: true, error: null };
+      console.log(`🛒 ${carts.length} panier(s) vidé(s) et supprimé(s) pour l'utilisateur ${userId}`);
+
+      // Retourner un panier vide
+      const emptyCart: Cart = {
+        id: '',
+        user_id: userId,
+        business_id: 0,
+        business_name: '',
+        items: [],
+        total: 0,
+        item_count: 0,
+        delivery_method: 'delivery',
+        delivery_address: '',
+        delivery_instructions: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      return { success: true, error: null, cart: emptyCart };
     } catch (error) {
       console.error('Erreur lors du vidage du panier:', error);
-      return { success: false, error: 'Erreur lors du vidage du panier' };
+      return { success: false, error: 'Erreur lors du vidage du panier', cart: null };
     }
   }
 
@@ -298,8 +803,7 @@ export class CartService {
   static async syncFromLocal(
     userId: string, 
     localItems: LocalCartItem[], 
-    businessId: number, 
-    businessName: string
+    businessId: number
   ): Promise<{ success: boolean; error: string | null }> {
     try {
       if (localItems.length === 0) {
@@ -307,30 +811,40 @@ export class CartService {
       }
 
       // Créer ou récupérer le panier
-      let { cart } = await this.getCart(userId);
-      if (!cart) {
-        const { cartId, error: createError } = await this.createCart(userId, businessId, businessName);
+      const { cartId, error: createError } = await this.createCart(userId, businessId);
         if (createError) {
           return { success: false, error: createError };
         }
         
-        const result = await this.getCart(userId);
-        cart = result.cart;
-        if (!cart) {
+      if (!cartId) {
           return { success: false, error: 'Erreur lors de la création du panier' };
         }
+      
+      // Récupérer le panier créé
+      const { cart } = await this.getCartByBusiness(userId, businessId);
+      if (!cart) {
+        return { success: false, error: 'Erreur lors de la récupération du panier' };
       }
 
       // Ajouter chaque article du localStorage
       for (const localItem of localItems) {
-        const existingItem = cart.items.find(cartItem => 
-          cartItem.menu_item_id === localItem.id && 
-          cartItem.name === localItem.name
-        );
+        // Vérifier si l'article existe déjà
+        const { data: existingItem } = await supabase
+          .from('cart_items')
+          .select('*')
+          .eq('cart_id', cart.id)
+          .eq('menu_item_id', localItem.id)
+          .maybeSingle();
 
         if (existingItem) {
           // Mettre à jour la quantité
-          await this.updateQuantity(existingItem.id, existingItem.quantity + localItem.quantity);
+          await supabase
+            .from('cart_items')
+            .update({
+              quantity: existingItem.quantity + localItem.quantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingItem.id);
         } else {
           // Ajouter le nouvel article
           await supabase

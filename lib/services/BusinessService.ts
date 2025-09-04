@@ -71,6 +71,34 @@ export class BusinessService {
   }
 
   /**
+   * Récupère tous les commerces qui acceptent les réservations
+   */
+  static async getBusinessesWithReservations(): Promise<BusinessWithType[]> {
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select(`
+          *,
+          business_type:business_types(id, name, icon, color, image_url),
+          category:categories(id, name, icon, color)
+        `)
+        .eq('is_active', true)
+        .eq('accepts_reservations', true)
+        .order('name');
+
+      if (error) {
+        console.error('Erreur lors de la récupération des commerces avec réservations:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Erreur dans getBusinessesWithReservations:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Récupère les commerces par type
    */
   static async getBusinessesByType(businessTypeId: number): Promise<BusinessWithType[]> {

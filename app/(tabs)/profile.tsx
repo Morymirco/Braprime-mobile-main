@@ -1,10 +1,11 @@
 import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Router, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProfileSkeleton from '../../components/ProfileSkeleton';
 import { useProfile } from '../../hooks/useProfile';
+import { useUserStats } from '../../hooks/useUserStats';
 import { useAuth } from '../../lib/contexts/AuthContext';
 
 interface IconProps {
@@ -18,6 +19,12 @@ const MENU_ITEMS = [
     title: 'Mes Commandes',
     icon: (props: IconProps) => <MaterialIcons name="receipt-long" {...props} />,
     onPress: (router: Router) => router.push('/orders'),
+  },
+  {
+    id: 'package-orders',
+    title: 'Mes Colis',
+    icon: (props: IconProps) => <MaterialIcons name="inventory" {...props} />,
+    onPress: (router: Router) => router.push('/package-orders'),
   },
   {
     id: 'reservations',
@@ -79,13 +86,12 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const { profile, loading, error } = useProfile();
+  
+  // Utiliser le hook pour les statistiques
+  const { stats, loading: statsLoading, error: statsError, forceRefresh } = useUserStats(profile?.id);
 
   const handleEditName = () => {
     router.push('/profile/edit');
-  };
-
-  const handleWalletPress = () => {
-    router.push('/wallet');
   };
 
   const handleMenuItemPress = (item: typeof MENU_ITEMS[0]) => {
@@ -153,25 +159,86 @@ export default function ProfileScreen() {
               style={styles.avatar}
             />
             <View style={styles.userNameContainer}>
-              <Text style={styles.userName}>
-                {profile?.name || 'Nom non défini'}
-              </Text>
-              <Text style={styles.editText}>Modifier</Text>
+              <View style={styles.nameAndEditContainer}>
+                <Text style={styles.userName}>
+                  {profile?.name || 'Nom non défini'}
+                </Text>
+                <Text style={styles.editText}>Modifier</Text>
+              </View>
             </View>
             <Feather name="chevron-right" size={20} color="#666" style={styles.editArrow} />
           </TouchableOpacity>
 
-          {/* Wallet Card */}
-          <TouchableOpacity style={styles.walletCard} onPress={handleWalletPress}>
-            <View>
-              <Text style={styles.walletLabel}>Portefeuille</Text>
-              <View style={styles.walletAmount}>
-                <Text style={styles.walletValue}>0</Text>
-                <Text style={styles.walletCurrency}>CFA</Text>
+          {/* Statistiques utilisateur */}
+          <View style={styles.statsHeader}>
+            <View style={styles.statsTitleContainer}>
+              <Text style={styles.statsTitle}>Mes Statistiques</Text>
+              {statsLoading && (
+                <Text style={styles.statsSubtitle}>Mise à jour...</Text>
+              )}
+              {statsError && (
+                <Text style={styles.statsError}>Erreur de chargement</Text>
+              )}
+            </View>
+            <TouchableOpacity 
+              style={[
+                styles.refreshButton,
+                statsLoading && styles.refreshButtonLoading
+              ]} 
+              onPress={forceRefresh}
+              disabled={statsLoading}
+            >
+              <MaterialIcons 
+                name="refresh" 
+                size={20} 
+                color={statsLoading ? "#ccc" : "#E31837"} 
+              />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <MaterialIcons name="receipt-long" size={24} color="#E31837" />
+              <View style={styles.statContent}>
+                {statsLoading ? (
+                  <View style={styles.statLoading}>
+                    <ActivityIndicator size="small" color="#E31837" />
+                  </View>
+                ) : (
+                  <Text style={styles.statValue}>{stats.orders}</Text>
+                )}
+                <Text style={styles.statLabel}>Commandes</Text>
               </View>
             </View>
-            <Feather name="chevron-right" size={20} color="#666" />
-          </TouchableOpacity>
+            
+            <View style={styles.statCard}>
+              <MaterialIcons name="event-available" size={24} color="#4CAF50" />
+              <View style={styles.statContent}>
+                {statsLoading ? (
+                  <View style={styles.statLoading}>
+                    <ActivityIndicator size="small" color="#4CAF50" />
+                  </View>
+                ) : (
+                  <Text style={styles.statValue}>{stats.reservations}</Text>
+                )}
+                <Text style={styles.statLabel}>Réservations</Text>
+              </View>
+            </View>
+            
+            <View style={styles.statCard}>
+              <MaterialIcons name="favorite-outline" size={24} color="#FF9800" />
+              <View style={styles.statContent}>
+                {statsLoading ? (
+                  <View style={styles.statLoading}>
+                    <ActivityIndicator size="small" color="#FF9800" />
+                  </View>
+                ) : (
+                  <Text style={styles.statValue}>{stats.favorites}</Text>
+                )}
+                <Text style={styles.statLabel}>Favoris</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Existing Menu Items */}
@@ -224,7 +291,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
   },
   settingsButton: {
@@ -275,59 +342,114 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     marginBottom: 24,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 16,
+    flexShrink: 0,
   },
   userNameContainer: {
     flex: 1,
+    alignItems: 'center',
+    marginRight: 8,
+    justifyContent: 'center',
+  },
+  nameAndEditContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   userName: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
+    flexShrink: 1,
+    marginRight: 8,
+    textAlign: 'center',
   },
   editText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
-    marginLeft: 8,
+    marginLeft: 4,
+    flexShrink: 0,
   },
   editArrow: {
     marginLeft: 'auto',
+    flexShrink: 0,
   },
-  walletCard: {
+  statsHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 16,
+    marginBottom: 12,
   },
-  walletLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+  statsTitleContainer: {
+    flex: 1,
   },
-  walletAmount: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  walletValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#000',
   },
-  walletCurrency: {
-    fontSize: 16,
+  statsSubtitle: {
+    fontSize: 12,
     color: '#666',
-    marginLeft: 4,
+    marginTop: 2,
+  },
+  statsError: {
+    fontSize: 12,
+    color: '#E31837',
+    marginTop: 2,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  refreshButtonLoading: {
+    opacity: 0.6,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  statContent: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  statLoading: {
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   menuContainer: {
     backgroundColor: '#fff',

@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
+    Alert,
     Dimensions,
     Image,
     Modal,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import { useFavorites } from '../hooks/useFavorites';
 import { useToast } from '../hooks/useToast';
+import { useCartContext } from '../lib/contexts/CartContext';
 import { MenuItemWithCategory } from '../lib/services/MenuService';
 
 const { width, height } = Dimensions.get('window');
@@ -21,16 +23,18 @@ interface MenuItemDetailProps {
   item: MenuItemWithCategory | null;
   visible: boolean;
   onClose: () => void;
-  onAddToCart: (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => void;
+  businessId?: number;
+  businessName?: string;
 }
 
-export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: MenuItemDetailProps) {
+export default function MenuItemDetail({ item, visible, onClose, businessId, businessName }: MenuItemDetailProps) {
   const [quantity, setQuantity] = useState(1);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const { addFavoriteMenuItem, removeFavoriteMenuItem, isMenuItemFavorite } = useFavorites();
   const { showToast } = useToast();
   const [isFavorite, setIsFavorite] = useState(false);
+  const { addToCart } = useCartContext();
 
   // Vérifier l'état des favoris au chargement
   useEffect(() => {
@@ -57,14 +61,34 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
   };
 
   const handleAddToCart = async () => {
+    if (!businessId || !businessName) {
+      Alert.alert('Erreur', 'Informations du commerce manquantes');
+      return;
+    }
+
     setIsAddingToCart(true);
     try {
-      await onAddToCart(item, quantity, specialInstructions.trim() || undefined);
+      await addToCart({
+        menu_item_id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: quantity,
+        image: item.image,
+        special_instructions: specialInstructions.trim() || undefined,
+      }, businessId);
+      
       // Reset form after successful add
       setQuantity(1);
       setSpecialInstructions('');
+      
+      // Show success message
+      showToast('success', `${item.name} ajouté au panier`);
+      
+      // Close modal
+      onClose();
     } catch (error) {
       console.error('Erreur lors de l\'ajout au panier:', error);
+      showToast('error', 'Erreur lors de l\'ajout au panier');
     } finally {
       setIsAddingToCart(false);
     }
@@ -239,6 +263,7 @@ export default function MenuItemDetail({ item, visible, onClose, onAddToCart }: 
               <TextInput
                 style={styles.instructionsInput}
                 placeholder="Ex: Sans oignons, bien cuit, etc."
+                placeholderTextColor="#999"
                 value={specialInstructions}
                 onChangeText={setSpecialInstructions}
                 multiline

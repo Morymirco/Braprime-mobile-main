@@ -88,6 +88,7 @@ const OrdersList = () => {
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
           <Text style={styles.businessName}>{item.business_name}</Text>
+          <Text style={styles.orderNumber}>Commande #{item.order_number || item.id}</Text>
           <Text style={styles.orderDate}>
             {new Date(item.created_at).toLocaleDateString('fr-FR')}
           </Text>
@@ -266,6 +267,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
+    marginBottom: 4,
+  },
+  orderNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E31837',
     marginBottom: 4,
   },
   orderDate: {

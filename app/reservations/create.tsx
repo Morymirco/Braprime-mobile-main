@@ -48,7 +48,8 @@ export default function CreateReservationScreen() {
   const loadBusinesses = async () => {
     try {
       setIsLoadingBusinesses(true);
-      const data = await BusinessService.getAllBusinesses();
+      // Récupérer uniquement les commerces qui acceptent les réservations
+      const data = await BusinessService.getBusinessesWithReservations();
       setBusinesses(data);
     } catch (error) {
       console.error('Erreur lors du chargement des restaurants:', error);

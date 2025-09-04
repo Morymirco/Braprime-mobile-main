@@ -1,114 +1,87 @@
-import { supabase } from '../supabase/config'
+import { supabase } from '../supabase/config';
 
 export interface AuthUser {
-  id: string
-  email: string
-  name: string
-  role: 'customer' | 'partner'
-  phone_number?: string
-  address?: string
-  profile_image?: string
+  id: string;
+  email: string;
+  name: string;
+  role: 'customer';
+  phone_number?: string;
+  address?: string;
+  profile_image?: string;
+}
+
+export interface SignupData {
+  email: string;
+  password: string;
+  name: string;
+  phone_number?: string;
+  address?: string;
+}
+
+export interface SignupResult {
+  user: AuthUser | null;
+  error: string | null;
+}
+
+export interface LoginResult {
+  user: AuthUser | null;
+  error: string | null;
 }
 
 export class AuthService {
   // Inscription d'un nouvel utilisateur (clients uniquement)
-  static async signup(userData: {
-    email: string
-    password: string
-    name: string
-    phone_number?: string
-    address?: string
-  }): Promise<{ user: AuthUser | null; error: string | null }> {
+  static async signup(userData: SignupData): Promise<SignupResult> {
     try {
-      console.log('Début de l\'inscription pour:', userData.email)
+      console.log('🚀 [AuthService] Début de l\'inscription client pour:', userData.email);
       
-      // Vérifier d'abord si l'utilisateur existe déjà
-      console.log('Vérification de l\'existence de l\'utilisateur...')
-      const { data: existingUser, error: checkError } = await supabase.auth.signInWithPassword({
-        email: userData.email,
-        password: userData.password,
-      })
+      // Vérifier que le rôle customer existe dans la base de données
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('id, name')
+        .eq('name', 'customer')
+        .single();
 
-      if (existingUser.user) {
-        console.log('Utilisateur existe déjà, tentative de connexion...')
-        // L'utilisateur existe, essayer de se connecter
-        return await this.login(userData.email, userData.password)
+      if (rolesError) {
+        console.error('❌ [AuthService] Erreur lors de la récupération du rôle customer:', rolesError);
+        return { user: null, error: 'Erreur de configuration des rôles' };
       }
 
-      // Créer l'utilisateur dans Supabase Auth (rôle customer uniquement)
+      console.log('✅ [AuthService] Rôle customer trouvé:', roles);
+      
+      // Créer l'utilisateur dans Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
         options: {
           data: {
             name: userData.name,
-            role: 'customer', // Rôle fixe pour les clients
+            role: 'customer',
             phone_number: userData.phone_number,
             address: userData.address,
           }
         }
-      })
+      });
 
       if (authError) {
-        console.error('Erreur Supabase Auth:', authError)
-        return { user: null, error: authError.message }
+        console.error('❌ [AuthService] Erreur Supabase Auth:', authError);
+        return { user: null, error: authError.message };
       }
 
       if (!authData.user) {
-        console.error('Aucun utilisateur créé dans auth')
-        return { user: null, error: 'Erreur lors de la création du compte' }
+        console.error('❌ [AuthService] Aucun utilisateur créé dans auth');
+        return { user: null, error: 'Erreur lors de la création du compte' };
       }
 
-      console.log('Utilisateur auth créé avec succès:', authData.user.id)
+      console.log('✅ [AuthService] Utilisateur auth créé avec succès:', authData.user.id);
 
-      // Créer manuellement le profil utilisateur dans user_profiles
-      const roleId = 1 // Customer role
-      const profileImage = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random`
+      const roleId = roles.id;
+      console.log('🔧 [AuthService] Utilisation du rôle customer avec ID:', roleId);
 
-      console.log('Création du profil utilisateur...')
+      const profileImage = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random`;
+
+      console.log('🔧 [AuthService] Création du profil utilisateur avec role_id:', roleId);
       
-      // Vérifier si le profil existe déjà avant de l'insérer
-      const { data: existingProfile, error: profileCheckError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', userData.email)
-        .single()
-
-      if (existingProfile) {
-        console.log('Profil existant trouvé, mise à jour...')
-        const { data: updatedProfile, error: updateError } = await supabase
-          .from('user_profiles')
-          .update({
-            name: userData.name,
-            phone_number: userData.phone_number,
-            address: userData.address,
-            profile_image: profileImage,
-            is_active: true
-          })
-          .eq('email', userData.email)
-          .select()
-          .single()
-
-        if (updateError) {
-          console.error('Erreur mise à jour profil:', updateError)
-          return { user: null, error: `Erreur lors de la mise à jour du profil: ${updateError.message}` }
-        }
-
-        return { 
-          user: {
-            id: updatedProfile.id,
-            email: updatedProfile.email,
-            name: updatedProfile.name,
-            role: 'customer',
-            phone_number: updatedProfile.phone_number,
-            address: updatedProfile.address,
-            profile_image: updatedProfile.profile_image
-          }, 
-          error: null 
-        }
-      }
-
-      // Créer un nouveau profil
+      // Créer le profil utilisateur dans user_profiles
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .insert({
@@ -119,360 +92,232 @@ export class AuthService {
           phone_number: userData.phone_number,
           address: userData.address,
           profile_image: profileImage,
-          is_active: true
+          is_verified: false,
+          is_manual_creation: false
         })
         .select()
-        .single()
+        .single();
 
       if (profileError) {
-        console.error('Erreur création profil:', profileError)
-        
-        // Si c'est une erreur de doublon, essayer de récupérer le profil existant
-        if (profileError.code === '23505') {
-          console.log('Profil en doublon détecté, récupération du profil existant...')
-          const { data: existingProfile, error: fetchError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('email', userData.email)
-            .single()
-
-          if (existingProfile && !fetchError) {
-            return { 
-              user: {
-                id: existingProfile.id,
-                email: existingProfile.email,
-                name: existingProfile.name,
-                role: 'customer',
-                phone_number: existingProfile.phone_number,
-                address: existingProfile.address,
-                profile_image: existingProfile.profile_image
-              }, 
-              error: null 
-            }
-          }
-        }
-        
-        // Essayer de supprimer l'utilisateur auth si le profil n'a pas pu être créé
+        console.error('❌ [AuthService] Erreur lors de la création du profil:', profileError);
+        // Essayer de supprimer l'utilisateur auth
         try {
-          await supabase.auth.admin.deleteUser(authData.user.id)
+          await supabase.auth.admin.deleteUser(authData.user.id);
         } catch (deleteError) {
-          console.error('Erreur lors de la suppression de l\'utilisateur auth:', deleteError)
+          console.error('❌ [AuthService] Erreur lors de la suppression de l\'utilisateur auth:', deleteError);
         }
-        
-        return { user: null, error: `Erreur lors de la création du profil: ${profileError.message}` }
+        return { user: null, error: 'Erreur lors de la création du profil utilisateur' };
       }
 
-      if (!profile) {
-        return { user: null, error: 'Erreur lors de la création du profil' }
-      }
+      console.log('✅ [AuthService] Profil utilisateur créé avec succès:', profile.id);
 
-      console.log('Profil utilisateur créé avec succès')
+      // Construire l'utilisateur de retour
+      const user: AuthUser = {
+        id: authData.user.id,
+        email: userData.email,
+        name: userData.name,
+        role: 'customer',
+        phone_number: userData.phone_number,
+        address: userData.address,
+        profile_image: profileImage
+      };
 
-      return { 
-        user: {
-          id: profile.id,
-          email: profile.email,
-          name: profile.name,
-          role: 'customer',
-          phone_number: profile.phone_number,
-          address: profile.address,
-          profile_image: profile.profile_image
-        }, 
-        error: null 
-      }
+      console.log('✅ [AuthService] Inscription client réussie pour:', user.email);
+      return { user, error: null };
+
     } catch (error) {
-      console.error('Erreur lors de l\'inscription:', error)
-      return { user: null, error: 'Erreur lors de l\'inscription' }
+      console.error('❌ [AuthService] Erreur inattendue lors de l\'inscription:', error);
+      return { 
+        user: null, 
+        error: error instanceof Error ? error.message : 'Une erreur inattendue s\'est produite' 
+      };
     }
   }
 
   // Connexion d'un utilisateur
-  static async login(email: string, password: string): Promise<{ user: AuthUser | null; error: string | null }> {
+  static async login(email: string, password: string): Promise<LoginResult> {
     try {
-      console.log('Tentative de connexion pour:', email)
+      console.log('🚀 [AuthService] Tentative de connexion pour:', email);
       
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
-        password,
-      })
+        password
+      });
 
       if (authError) {
-        console.error('Erreur connexion:', authError)
-        return { user: null, error: authError.message }
+        console.error('❌ [AuthService] Erreur de connexion:', authError);
+        return { user: null, error: authError.message };
       }
 
       if (!authData.user) {
-        return { user: null, error: 'Utilisateur non trouvé' }
+        console.error('❌ [AuthService] Aucun utilisateur retourné');
+        return { user: null, error: 'Erreur lors de la connexion' };
       }
 
-      console.log('Connexion auth réussie, récupération du profil...')
-
-      // Récupérer le profil utilisateur depuis user_profiles (SANS JOIN avec user_roles)
-      let { data: profile, error: profileError } = await supabase
+      // Récupérer le profil utilisateur complet
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select(`
-          id,
-          name,
-          email,
-          phone_number,
-          address,
-          profile_image,
-          role_id
+          *,
+          user_roles(name)
         `)
         .eq('id', authData.user.id)
-        .single()
+        .single();
 
       if (profileError) {
-        console.error('Erreur récupération profil:', profileError)
-        
-        // Essayer de récupérer par email si l'ID ne correspond pas
-        console.log('Tentative de récupération par email...')
-        const { data: profileByEmail, error: emailError } = await supabase
-          .from('user_profiles')
-          .select(`
-            id,
-            name,
-            email,
-            phone_number,
-            address,
-            profile_image,
-            role_id
-          `)
-          .eq('email', authData.user.email)
-          .single()
-
-        if (profileByEmail && !emailError) {
-          console.log('Profil trouvé par email, mise à jour de l\'ID...')
-          // Mettre à jour l'ID du profil pour correspondre à l'utilisateur auth
-          const { data: updatedProfile, error: updateError } = await supabase
-            .from('user_profiles')
-            .update({ id: authData.user.id })
-            .eq('email', authData.user.email)
-            .select()
-            .single()
-
-          if (updatedProfile && !updateError) {
-            profile = updatedProfile
-          } else {
-            profile = profileByEmail
-          }
-        } else {
-          // Si le profil n'existe pas, le créer automatiquement
-          console.log('Profil non trouvé, création automatique...')
-          const roleId = authData.user.user_metadata?.role === 'partner' ? 2 : 1
-          const name = authData.user.user_metadata?.name || 'Utilisateur'
-          const profileImage = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
-          
-          const { data: newProfile, error: createError } = await supabase
-            .from('user_profiles')
-            .insert({
-              id: authData.user.id,
-              name: name,
-              email: authData.user.email || '',
-              role_id: roleId,
-              phone_number: authData.user.user_metadata?.phone_number,
-              address: authData.user.user_metadata?.address,
-              profile_image: profileImage,
-              is_active: true
-            })
-            .select()
-            .single()
-            
-          if (createError) {
-            console.error('Erreur création profil automatique:', createError)
-            // Retourner les données de base de l'utilisateur auth
-            return { 
-              user: {
-                id: authData.user.id,
-                email: authData.user.email || '',
-                name: name,
-                role: authData.user.user_metadata?.role || 'customer',
-                phone_number: authData.user.user_metadata?.phone_number,
-                address: authData.user.user_metadata?.address,
-                profile_image: profileImage
-              }, 
-              error: null 
-            }
-          }
-          
-          profile = newProfile
-        }
+        console.error('❌ [AuthService] Erreur lors de la récupération du profil:', profileError);
+        return { user: null, error: 'Erreur lors de la récupération du profil' };
       }
 
-      if (!profile) {
-        return { user: null, error: 'Profil utilisateur non trouvé' }
+      // Vérifier que l'utilisateur est bien un client
+      if (profile.user_roles?.name !== 'customer') {
+        console.error('❌ [AuthService] Utilisateur non autorisé (rôle non client):', profile.user_roles?.name);
+        return { user: null, error: 'Type de compte non autorisé' };
       }
 
-      // Déterminer le rôle basé sur role_id
-      const role = profile.role_id === 2 ? 'partner' : 'customer'
-
-      console.log('Connexion réussie pour:', profile.name)
-
-      return { 
-        user: {
-          id: profile.id,
+      const user: AuthUser = {
+        id: authData.user.id,
           email: profile.email,
           name: profile.name,
-          role: role,
+        role: 'customer',
           phone_number: profile.phone_number,
           address: profile.address,
           profile_image: profile.profile_image
-        }, 
-        error: null 
-      }
+      };
+
+      console.log('✅ [AuthService] Connexion client réussie pour:', user.email);
+      return { user, error: null };
+
     } catch (error) {
-      console.error('Erreur lors de la connexion:', error)
-      return { user: null, error: 'Erreur lors de la connexion' }
+      console.error('❌ [AuthService] Erreur inattendue lors de la connexion:', error);
+      return { user: null, error: 'Une erreur inattendue s\'est produite' };
     }
   }
 
   // Déconnexion
-  static async logout(): Promise<{ error: string | null }> {
+  static async logout(): Promise<void> {
     try {
-      const { error } = await supabase.auth.signOut()
-      return { error: error?.message || null }
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('❌ [AuthService] Erreur lors de la déconnexion:', error);
+      } else {
+        console.log('✅ [AuthService] Déconnexion réussie');
+      }
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error)
-      return { error: 'Erreur lors de la déconnexion' }
+      console.error('❌ [AuthService] Erreur inattendue lors de la déconnexion:', error);
     }
   }
 
   // Récupérer l'utilisateur actuel
   static async getCurrentUser(): Promise<{ user: AuthUser | null; error: string | null }> {
     try {
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
       if (authError || !authUser) {
-        return { user: null, error: authError?.message || 'Utilisateur non connecté' }
+        return { user: null, error: authError?.message || 'Utilisateur non connecté' };
       }
 
-      // Récupérer le profil utilisateur depuis user_profiles (SANS JOIN avec user_roles)
+      // Récupérer le profil utilisateur complet
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select(`
-          id,
-          name,
-          email,
-          phone_number,
-          address,
-          profile_image,
-          role_id
+          *,
+          user_roles(name)
         `)
         .eq('id', authUser.id)
-        .single()
+        .single();
 
       if (profileError) {
-        console.error('Erreur récupération profil:', profileError)
-        // Retourner les données de base de l'utilisateur auth
-        return { 
-          user: {
-            id: authUser.id,
-            email: authUser.email || '',
-            name: authUser.user_metadata?.name || 'Utilisateur',
-            role: authUser.user_metadata?.role || 'customer',
-            phone_number: authUser.user_metadata?.phone_number,
-            address: authUser.user_metadata?.address,
-            profile_image: authUser.user_metadata?.profile_image
-          }, 
-          error: null 
-        }
+        console.error('❌ [AuthService] Erreur lors de la récupération du profil:', profileError);
+        return { user: null, error: 'Erreur lors de la récupération du profil' };
       }
 
-      if (!profile) {
-        return { user: null, error: 'Profil utilisateur non trouvé' }
+      // Vérifier que l'utilisateur est bien un client
+      if (profile.user_roles?.name !== 'customer') {
+        console.error('❌ [AuthService] Utilisateur non autorisé (rôle non client):', profile.user_roles?.name);
+        return { user: null, error: 'Type de compte non autorisé' };
       }
 
-      // Déterminer le rôle basé sur role_id
-      const role = profile.role_id === 2 ? 'partner' : 'customer'
-
-      return { 
-        user: {
-          id: profile.id,
+      const user: AuthUser = {
+        id: authUser.id,
           email: profile.email,
           name: profile.name,
-          role: role,
+        role: 'customer',
           phone_number: profile.phone_number,
           address: profile.address,
           profile_image: profile.profile_image
-        }, 
-        error: null 
-      }
+      };
+
+      return { user, error: null };
+
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'utilisateur:', error)
-      return { user: null, error: 'Erreur lors de la récupération de l\'utilisateur' }
+      console.error('❌ [AuthService] Erreur lors de la récupération de l\'utilisateur actuel:', error);
+      return { user: null, error: 'Erreur lors de la récupération de l\'utilisateur' };
+    }
+  }
+
+  // Écouter les changements d'état d'authentification
+  static onAuthStateChange(callback: (user: AuthUser | null) => void) {
+    return supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { user } = await this.getCurrentUser();
+        callback(user);
+      } else if (event === 'SIGNED_OUT') {
+        callback(null);
+      }
+    });
+  }
+
+  // Récupérer la session Supabase actuelle
+  static async getSupabaseSession() {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      return { data, error };
+    } catch (error) {
+      console.error('❌ [AuthService] Erreur lors de la récupération de la session Supabase:', error);
+      return { data: { session: null }, error };
     }
   }
 
   // Mettre à jour le profil utilisateur
   static async updateProfile(userId: string, updates: Partial<AuthUser>): Promise<{ user: AuthUser | null; error: string | null }> {
     try {
-      const { data: profile, error } = await supabase
+      console.log('🚀 [AuthService] Mise à jour du profil pour:', userId);
+
+      const updateData: any = {};
+      if (updates.name) updateData.name = updates.name;
+      if (updates.phone_number !== undefined) updateData.phone_number = updates.phone_number;
+      if (updates.address !== undefined) updateData.address = updates.address;
+      if (updates.profile_image) updateData.profile_image = updates.profile_image;
+
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
-        .update(updates)
+        .update(updateData)
         .eq('id', userId)
         .select()
-        .single()
+        .single();
 
-      if (error) {
-        return { user: null, error: error.message }
+      if (profileError) {
+        console.error('❌ [AuthService] Erreur lors de la mise à jour du profil:', profileError);
+        return { user: null, error: 'Erreur lors de la mise à jour du profil' };
       }
 
-      return { user: profile, error: null }
+      const user: AuthUser = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: 'customer',
+        phone_number: profile.phone_number,
+        address: profile.address,
+        profile_image: profile.profile_image
+      };
+
+      console.log('✅ [AuthService] Profil mis à jour avec succès');
+      return { user, error: null };
+
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du profil:', error)
-      return { user: null, error: 'Erreur lors de la mise à jour du profil' }
+      console.error('❌ [AuthService] Erreur inattendue lors de la mise à jour du profil:', error);
+      return { user: null, error: 'Une erreur inattendue s\'est produite' };
     }
-  }
-
-  // Écouter les changements d'authentification
-  static onAuthStateChange(callback: (user: AuthUser | null) => void) {
-    return supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select(`
-            id,
-            name,
-            email,
-            phone_number,
-            address,
-            profile_image,
-            role_id
-          `)
-          .eq('id', session.user.id)
-          .single()
-        
-        if (profile) {
-          const role = profile.role_id === 2 ? 'partner' : 'customer'
-          callback({
-            id: profile.id,
-            email: profile.email,
-            name: profile.name,
-            role: role,
-            phone_number: profile.phone_number,
-            address: profile.address,
-            profile_image: profile.profile_image
-          })
-        } else {
-          // Fallback vers les données de session
-          callback({
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name || 'Utilisateur',
-            role: session.user.user_metadata?.role || 'customer',
-            phone_number: session.user.user_metadata?.phone_number,
-            address: session.user.user_metadata?.address,
-            profile_image: session.user.user_metadata?.profile_image
-          })
-        }
-      } else if (event === 'SIGNED_OUT') {
-        callback(null)
-      }
-    })
-  }
-
-  // Récupérer la session Supabase actuelle
-  static async getSupabaseSession() {
-    return await supabase.auth.getSession()
   }
 } 

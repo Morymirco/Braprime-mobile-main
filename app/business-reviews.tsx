@@ -44,11 +44,11 @@ export default function BusinessReviewsScreen() {
         <View style={styles.userInfo}>
           <View style={styles.userAvatar}>
             <Text style={styles.userInitial}>
-              {item.user_name.charAt(0).toUpperCase()}
+              {item.user_name ? item.user_name.charAt(0).toUpperCase() : 'U'}
             </Text>
           </View>
           <View style={styles.userDetails}>
-            <Text style={styles.userName}>{item.user_name}</Text>
+            <Text style={styles.userName}>{item.user_name || 'Utilisateur'}</Text>
             <Text style={styles.reviewDate}>{formatDate(item.created_at)}</Text>
           </View>
         </View>

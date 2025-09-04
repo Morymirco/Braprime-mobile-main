@@ -14,8 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MenuItemDetail from '../../../components/MenuItemDetail';
 import ToastContainer from '../../../components/ToastContainer';
+import { useCart } from '../../../hooks/use-cart';
 import { useBusiness } from '../../../hooks/useBusiness';
-import { useCart } from '../../../hooks/useCart';
 import { useFavorites } from '../../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../../hooks/useMenu';
 import { useToast } from '../../../hooks/useToast';
@@ -90,38 +90,6 @@ export default function BusinessMenuScreen() {
     setModalVisible(true);
   }, []);
 
-  const handleAddToCart = useCallback(async (item: MenuItemWithCategory, quantity: number, specialInstructions?: string) => {
-    if (!business) {
-      showToast('error', 'Erreur: Commerce non trouvé');
-      return;
-    }
-
-    try {
-      const result = await addToCart(
-        {
-          menu_item_id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: quantity,
-          image: item.image,
-          special_instructions: specialInstructions,
-        },
-        business.id,
-        business.name
-      );
-
-      if (result.success) {
-        showToast('success', `${quantity}x ${item.name} ajouté au panier`);
-        setModalVisible(false);
-        setSelectedMenuItem(null);
-      } else {
-        showToast('error', result.error || 'Erreur lors de l\'ajout au panier');
-      }
-    } catch (error) {
-      showToast('error', 'Erreur lors de l\'ajout au panier');
-      console.error('Erreur lors de l\'ajout au panier:', error);
-    }
-  }, [business, addToCart, showToast]);
 
   const handleQuickAddToCart = useCallback(async (item: MenuItemWithCategory) => {
     if (!business) {
@@ -423,7 +391,8 @@ export default function BusinessMenuScreen() {
         item={selectedMenuItem}
         visible={modalVisible}
         onClose={handleCloseModal}
-        onAddToCart={handleAddToCart}
+        businessId={business?.id}
+        businessName={business?.name}
       />
     </SafeAreaView>
   );

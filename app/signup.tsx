@@ -2,18 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthService } from '../lib/services/AuthService';
+import { AuthService, SignupData } from '../lib/services/AuthService';
 
 interface FormData {
   name: string;
@@ -86,6 +86,17 @@ export default function SignupScreen() {
       }
     }
 
+    if (step === 3) {
+      if (!formData.phone_number.trim()) {
+        newErrors.phone_number = 'Le numéro de téléphone est requis';
+      } else if (!/^[\+]?[0-9\s\-\(\)]{8,}$/.test(formData.phone_number)) {
+        newErrors.phone_number = 'Format de téléphone invalide';
+      }
+      if (!formData.address.trim()) {
+        newErrors.address = 'L\'adresse est requise';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -107,19 +118,39 @@ export default function SignupScreen() {
 
     setIsLoading(true);
     try {
-      const result = await AuthService.signup({
+      const signupData: SignupData = {
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        phone_number: formData.phone_number || null,
-        address: formData.address || null,
-        role: 'customer'
-      });
+        phone_number: formData.phone_number || undefined,
+        address: formData.address || undefined
+      };
 
+      console.log('🚀 [SignupScreen] Tentative d\'inscription pour:', signupData.email);
+      
+      let result;
+      try {
+        result = await AuthService.signup(signupData);
+        console.log('📋 [SignupScreen] Résultat de l\'inscription:', result);
+        
+        // S'assurer que le résultat est toujours un objet valide
+        if (!result) {
+          result = { user: null, error: 'Aucune réponse du service d\'authentification' };
+        }
+      } catch (serviceError) {
+        console.error('❌ [SignupScreen] Erreur lors de l\'appel AuthService:', serviceError);
+        result = { 
+          user: null, 
+          error: serviceError instanceof Error ? serviceError.message : 'Erreur de connexion au service d\'authentification' 
+        };
+      }
+
+      // À ce stade, result est garanti d'être un objet valide avec user et error
       if (result.user) {
+        console.log('✅ [SignupScreen] Inscription réussie pour:', result.user.email);
         Alert.alert(
           'Succès',
-          'Compte créé avec succès ! Vous pouvez maintenant vous connecter.',
+          'Compte client créé avec succès ! Vous pouvez maintenant vous connecter.',
           [
             {
               text: 'OK',
@@ -128,10 +159,12 @@ export default function SignupScreen() {
           ]
         );
       } else {
+        console.error('❌ [SignupScreen] Échec de l\'inscription:', result.error);
         Alert.alert('Erreur', result.error || 'Erreur lors de la création du compte');
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Une erreur inattendue s\'est produite');
+      console.error('❌ [SignupScreen] Erreur inattendue:', error);
+      Alert.alert('Erreur', 'Une erreur inattendue s\'est produite. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +184,7 @@ export default function SignupScreen() {
         <View style={[styles.stepCircle, currentStep >= 1 && styles.stepCircleActive]}>
           <Text style={[styles.stepNumber, currentStep >= 1 && styles.stepNumberActive]}>1</Text>
         </View>
-        <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Informations</Text>
+        <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Profil</Text>
       </View>
       
       <View style={[styles.stepLine, currentStep >= 2 && styles.stepLineActive]} />
@@ -178,7 +211,7 @@ export default function SignupScreen() {
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>Informations personnelles</Text>
       <Text style={styles.stepDescription}>
-        Commençons par vos informations de base pour créer votre compte.
+        Commençons par vos informations de base pour créer votre compte client.
       </Text>
 
       {/* Nom */}
@@ -187,6 +220,7 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Nom complet"
+          placeholderTextColor="#999"
           value={formData.name}
           onChangeText={(value) => handleInputChange('name', value)}
           autoCapitalize="words"
@@ -201,7 +235,8 @@ export default function SignupScreen() {
         <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Adresse email"
+          placeholder="Email"
+          placeholderTextColor="#999"
           value={formData.email}
           onChangeText={(value) => handleInputChange('email', value)}
           keyboardType="email-address"
@@ -211,6 +246,14 @@ export default function SignupScreen() {
         />
       </View>
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+
+      {/* Informations sur le compte client */}
+      <View style={styles.infoContainer}>
+        <Ionicons name="information-circle-outline" size={20} color="#007AFF" />
+        <Text style={styles.infoText}>
+          Vous créez un compte client pour commander vos plats préférés et suivre vos livraisons.
+        </Text>
+      </View>
     </View>
   );
 
@@ -227,15 +270,21 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Mot de passe"
+          placeholderTextColor="#999"
           value={formData.password}
           onChangeText={(value) => handleInputChange('password', value)}
           secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
           editable={!isLoading}
         />
-        <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-          <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+        <TouchableOpacity
+          style={styles.passwordToggle}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Ionicons 
+            name={showPassword ? "eye-off-outline" : "eye-outline"} 
+            size={20} 
+            color="#666" 
+          />
         </TouchableOpacity>
       </View>
       {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
@@ -246,18 +295,45 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Confirmer le mot de passe"
+          placeholderTextColor="#999"
           value={formData.confirmPassword}
           onChangeText={(value) => handleInputChange('confirmPassword', value)}
           secureTextEntry={!showConfirmPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
           editable={!isLoading}
         />
-        <TouchableOpacity onPress={() => setShowConfirmPassword((v) => !v)}>
-          <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+        <TouchableOpacity
+          style={styles.passwordToggle}
+          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+        >
+          <Ionicons 
+            name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
+            size={20} 
+            color="#666" 
+          />
         </TouchableOpacity>
       </View>
       {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+
+      {/* Indicateur de force du mot de passe */}
+      <View style={styles.passwordStrengthContainer}>
+        <Text style={styles.passwordStrengthLabel}>Force du mot de passe:</Text>
+        <View style={styles.passwordStrengthBars}>
+          {[1, 2, 3].map((level) => (
+            <View
+              key={level}
+              style={[
+                styles.passwordStrengthBar,
+                formData.password.length >= level * 2 && styles.passwordStrengthBarActive,
+                formData.password.length >= 6 && level === 3 && styles.passwordStrengthBarStrong
+              ]}
+            />
+          ))}
+        </View>
+        <Text style={styles.passwordStrengthText}>
+          {formData.password.length < 6 ? 'Faible' : 
+           formData.password.length < 8 ? 'Moyen' : 'Fort'}
+        </Text>
+      </View>
     </View>
   );
 
@@ -265,15 +341,16 @@ export default function SignupScreen() {
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>Informations de contact</Text>
       <Text style={styles.stepDescription}>
-        Ces informations sont optionnelles mais nous aideront à améliorer votre expérience.
+        Ajoutez vos informations de contact pour une meilleure expérience de livraison.
       </Text>
 
-      {/* Numéro de téléphone */}
+      {/* Téléphone */}
       <View style={styles.inputContainer}>
         <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Numéro de téléphone (optionnel)"
+          placeholder="Numéro de téléphone"
+          placeholderTextColor="#999"
           value={formData.phone_number}
           onChangeText={(value) => handleInputChange('phone_number', value)}
           keyboardType="phone-pad"
@@ -286,8 +363,9 @@ export default function SignupScreen() {
       <View style={styles.inputContainer}>
         <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Adresse (optionnel)"
+          style={styles.input}
+          placeholder="Adresse de livraison"
+          placeholderTextColor="#999"
           value={formData.address}
           onChangeText={(value) => handleInputChange('address', value)}
           multiline
@@ -297,6 +375,14 @@ export default function SignupScreen() {
         />
       </View>
       {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+
+      {/* Informations sur la livraison */}
+      <View style={styles.infoContainer}>
+        <Ionicons name="car-outline" size={20} color="#34C759" />
+        <Text style={styles.infoText}>
+          Votre adresse nous permet de vous proposer les meilleurs restaurants et commerces à proximité.
+        </Text>
+      </View>
     </View>
   );
 
@@ -316,78 +402,72 @@ export default function SignupScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
-        style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
       >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Créer un compte client</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {/* Step Indicator */}
+        {renderStepIndicator()}
+
+        {/* Content */}
         <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          style={styles.content}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.contentContainer}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={24} color="black" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Créer un compte</Text>
-          </View>
-
-          {/* Step Indicator */}
-          {renderStepIndicator()}
-
-          {/* Form */}
-          <View style={styles.form}>
-            {renderCurrentStep()}
-
-            {/* Navigation Buttons */}
-            <View style={[
-              styles.navigationButtons,
-              currentStep === 3 && styles.navigationButtonsCentered
-            ]}>
-              {currentStep > 1 && (
-                <TouchableOpacity 
-                  style={styles.previousButton}
-                  onPress={handlePreviousStep}
-                  disabled={isLoading}
-                >
-                  <Ionicons name="chevron-back" size={20} color="#666" />
-                  <Text style={styles.previousButtonText}>Précédent</Text>
-                </TouchableOpacity>
-              )}
-
-              {currentStep < 3 ? (
-                <TouchableOpacity 
-                  style={styles.nextButton}
-                  onPress={handleNextStep}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.nextButtonText}>Suivant</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#fff" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={[styles.signupButton, isLoading && styles.signupButtonDisabled]}
-                  onPress={handleSignup}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Text style={styles.signupButtonText}>Création en cours...</Text>
-                  ) : (
-                    <Text style={styles.signupButtonText}>Créer mon compte</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Lien vers la connexion */}
-            <View style={styles.loginLink}>
-              <Text style={styles.loginText}>Vous avez déjà un compte ? </Text>
-              <TouchableOpacity onPress={handleBackToLogin}>
-                <Text style={styles.loginLinkText}>Se connecter</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {renderCurrentStep()}
         </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <View style={styles.buttonContainer}>
+            {currentStep > 1 && (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handlePreviousStep}
+                disabled={isLoading}
+              >
+                <Text style={styles.secondaryButtonText}>Précédent</Text>
+              </TouchableOpacity>
+            )}
+            
+            {currentStep < 3 ? (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleNextStep}
+                disabled={isLoading}
+              >
+                <Text style={styles.primaryButtonText}>Suivant</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+                onPress={handleSignup}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Text style={styles.primaryButtonText}>Création...</Text>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Créer mon compte</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity onPress={handleBackToLogin} style={styles.loginLink}>
+            <Text style={styles.loginLinkText}>
+              Déjà un compte ? <Text style={styles.loginLinkBold}>Se connecter</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -398,85 +478,85 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  keyboardView: {
+  keyboardAvoidingView: {
     flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
   },
   backButton: {
-    padding: 4,
+    padding: 5,
   },
-  title: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    marginLeft: 12,
+    color: '#333',
+  },
+  placeholder: {
+    width: 34,
   },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 24,
-    backgroundColor: '#f8f9fa',
+    paddingVertical: 20,
   },
   stepContainer: {
     alignItems: 'center',
   },
   stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#e9ecef',
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
   },
   stepCircleActive: {
-    backgroundColor: '#E31837',
+    backgroundColor: '#E41E31',
   },
   stepNumber: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#999',
   },
   stepNumberActive: {
     color: '#fff',
   },
   stepLabel: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: '#999',
   },
   stepLabelActive: {
-    color: '#E31837',
+    color: '#E41E31',
+    fontWeight: '600',
   },
   stepLine: {
-    width: 40,
+    width: 60,
     height: 2,
-    backgroundColor: '#e9ecef',
-    marginHorizontal: 8,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 10,
   },
   stepLineActive: {
-    backgroundColor: '#E31837',
+    backgroundColor: '#E41E31',
   },
-  form: {
-    padding: 16,
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   stepContent: {
-    marginBottom: 24,
+    paddingTop: 20,
   },
   stepTitle: {
     fontSize: 24,
@@ -487,19 +567,19 @@ const styles = StyleSheet.create({
   stepDescription: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 24,
+    marginBottom: 30,
     lineHeight: 22,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
+    backgroundColor: '#fff',
   },
   inputIcon: {
     marginRight: 12,
@@ -508,84 +588,115 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#333',
-    paddingVertical: 16,
   },
-  textArea: {
-    height: 80,
+  passwordToggle: {
+    padding: 5,
   },
   errorText: {
-    color: '#E31837',
+    color: '#FF3B30',
     fontSize: 14,
-    marginTop: -8,
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFE5E5',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#E41E31',
+    marginLeft: 12,
+    lineHeight: 20,
+  },
+  passwordStrengthContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+  },
+  passwordStrengthLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  passwordStrengthBars: {
+    flexDirection: 'row',
     marginBottom: 8,
   },
-  navigationButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 24,
-    gap: 16,
-  },
-  navigationButtonsCentered: {
-    justifyContent: 'center',
-  },
-  previousButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  previousButtonText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E31837',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  nextButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
+  passwordStrengthBar: {
+    width: 60,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
     marginRight: 8,
   },
-  signupButton: {
-    backgroundColor: '#E31837',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
+  passwordStrengthBarActive: {
+    backgroundColor: '#FF9500',
+  },
+  passwordStrengthBarStrong: {
+    backgroundColor: '#34C759',
+  },
+  passwordStrengthText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    backgroundColor: '#fff',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#E41E31',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  signupButtonDisabled: {
+  primaryButtonDisabled: {
     backgroundColor: '#ccc',
   },
-  signupButtonText: {
+  primaryButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#FFE5E5',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#E41E31',
     fontSize: 16,
     fontWeight: '600',
   },
   loginLink: {
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    fontSize: 16,
-    color: '#666',
   },
   loginLinkText: {
-    fontSize: 16,
-    color: '#E31837',
+    fontSize: 14,
+    color: '#666',
+  },
+  loginLinkBold: {
+    color: '#E41E31',
     fontWeight: '600',
   },
 }); 
