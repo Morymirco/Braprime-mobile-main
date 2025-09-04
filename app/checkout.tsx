@@ -2,30 +2,30 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CommuneQuartierSelector from '../components/CommuneQuartierSelector';
 import PaymentWebView from '../components/PaymentWebView';
 import ToastContainer from '../components/ToastContainer';
 import { useCart } from '../hooks/use-cart';
-import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
+import { useToast } from '../lib/contexts/ToastContext';
 import { orderService } from '../lib/services/OrderService';
 import { PaymentRequest, PaymentService } from '../lib/services/PaymentService';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { cart, loading, loadingStates, clearCart } = useCart();
+  const { cart, loading, loadingStates } = useCart();
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
@@ -73,6 +73,9 @@ export default function CheckoutScreen() {
       }));
     }
   }, [user, formData.firstName]);
+
+  // Plus besoin de vérification périodique - on utilise la même logique que le client web
+  // La WebView détecte la redirection vers order-confirmation et on vérifie en base
 
   // Calculer les totaux
   const cartTotal = cart?.items?.reduce((total, item) => total + (item.price * item.quantity), 0) || 0;
@@ -221,6 +224,12 @@ export default function CheckoutScreen() {
         return;
       }
 
+      // Validation supplémentaire des paramètres de paiement
+      if (!formData.phone || formData.phone.trim() === '') {
+        showToast('error', 'Le numéro de téléphone est requis pour le paiement');
+        return;
+      }
+
       // Préparer les données de paiement
       const paymentData: PaymentRequest = {
         order_id: orderId,
@@ -228,7 +237,7 @@ export default function CheckoutScreen() {
         amount: grandTotal,
         currency: 'GNF',
         payment_method: 'mobile_money',
-        phone_number: formData.phone,
+        phone_number: formData.phone.trim(),
         order_number: orderId, // Utiliser l'ID de commande comme numéro
         business_name: cart.is_multi_service ? 'Multi-services' : (cart.business_name || 'BraPrime'),
         customer_name: `${formData.firstName} ${formData.lastName}`.trim(),
@@ -236,6 +245,16 @@ export default function CheckoutScreen() {
       };
 
       console.log('🔍 DEBUG - Création du paiement avec les données:', paymentData);
+
+      // Validation finale des paramètres requis
+      const requiredParams = ['order_id', 'user_id', 'amount', 'payment_method', 'phone_number', 'order_number', 'business_name', 'customer_name', 'customer_email'];
+      const missingParams = requiredParams.filter(param => !paymentData[param as keyof PaymentRequest]);
+      
+      if (missingParams.length > 0) {
+        console.error('❌ Paramètres manquants:', missingParams);
+        showToast('error', `Paramètres manquants: ${missingParams.join(', ')}`);
+        return;
+      }
 
       const paymentResponse = await PaymentService.createPayment(paymentData);
       
@@ -254,33 +273,35 @@ export default function CheckoutScreen() {
     }
   };
 
-  // Gérer le succès du paiement
+
+  // Gérer le succès du paiement (appelé par la WebView)
   const handlePaymentSuccess = async (payId: string) => {
     console.log('✅ Paiement réussi avec pay_id:', payId);
+    
+    // Fermer la WebView immédiatement
     setShowPaymentWebView(false);
     
-    // Vider le panier maintenant que le paiement est confirmé
-    try {
-      await clearCart();
-      console.log('🛒 Panier vidé après paiement réussi');
-    } catch (error) {
-      console.error('❌ Erreur lors du vidage du panier:', error);
+    // Rediriger vers la page de confirmation avec l'ID de la commande
+    // La page de confirmation se chargera de vérifier le statut en base de données
+    if (currentOrderId) {
+      console.log('🔄 Redirection vers la page de confirmation avec order_id:', currentOrderId);
+      router.replace(`/payment-confirmation?order_id=${currentOrderId}&pay_id=${payId}` as any);
+    } else {
+      console.error('❌ ID de commande manquant pour la redirection');
+      showToast('error', 'Erreur: ID de commande manquant');
     }
-    
-    showToast('success', 'Paiement effectué avec succès !');
-    
-    // Rediriger vers la page de confirmation
-    router.replace(`/payment-confirmation?pay_id=${payId}&order_id=${currentOrderId}&status=success` as any);
   };
 
-  // Gérer l'erreur du paiement
+  // Gérer l'erreur du paiement (appelé par la WebView)
   const handlePaymentError = (error: string) => {
     console.log('❌ Erreur de paiement:', error);
     setShowPaymentWebView(false);
     showToast('error', error);
     
     // Rediriger vers la page de confirmation avec le statut d'erreur
-    router.replace(`/payment-confirmation?pay_id=unknown&order_id=${currentOrderId}&status=failed` as any);
+    if (currentOrderId) {
+      router.replace(`/payment-confirmation?order_id=${currentOrderId}&status=failed` as any);
+    }
   };
 
   // Fermer la WebView de paiement

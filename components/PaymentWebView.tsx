@@ -11,7 +11,7 @@ import {
   View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../lib/contexts/ToastContext';
 
 interface PaymentWebViewProps {
   paymentUrl: string;

@@ -2,6 +2,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     ScrollView,
     StyleSheet,
@@ -96,21 +97,6 @@ export default function AppReviewScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color="black" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Donner un avis</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -207,9 +193,16 @@ export default function AppReviewScreen() {
               onPress={handleSubmit}
               disabled={rating === 0 || submitting}
             >
-              <Text style={styles.submitButtonText}>
-                {submitting ? 'Enregistrement...' : (userReview ? 'Mettre à jour' : 'Envoyer l\'avis')}
-              </Text>
+              {submitting ? (
+                <View style={styles.submitButtonLoading}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.submitButtonText}>Enregistrement...</Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  {userReview ? 'Mettre à jour' : 'Envoyer l\'avis'}
+                </Text>
+              )}
             </TouchableOpacity>
 
             {userReview && (
@@ -267,15 +260,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
   },
   statsContainer: {
     backgroundColor: '#fff',
@@ -400,6 +384,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  submitButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteButton: {
     backgroundColor: 'transparent',

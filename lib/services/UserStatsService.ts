@@ -4,6 +4,7 @@ export interface UserStats {
   orders: number;
   reservations: number;
   favorites: number;
+  packages: number;
 }
 
 export class UserStatsService {
@@ -15,16 +16,18 @@ export class UserStatsService {
       console.log('🔄 Chargement des statistiques pour l\'utilisateur:', userId);
 
       // Récupérer les statistiques en parallèle pour optimiser les performances
-      const [ordersCount, reservationsCount, favoritesCount] = await Promise.all([
+      const [ordersCount, reservationsCount, favoritesCount, packagesCount] = await Promise.all([
         this.getUserOrdersCount(userId),
         this.getUserReservationsCount(userId),
-        this.getUserFavoritesCount(userId)
+        this.getUserFavoritesCount(userId),
+        this.getUserPackagesCount(userId)
       ]);
 
       const stats: UserStats = {
         orders: ordersCount,
         reservations: reservationsCount,
-        favorites: favoritesCount
+        favorites: favoritesCount,
+        packages: packagesCount
       };
 
       console.log('✅ Statistiques chargées avec succès:', stats);
@@ -37,14 +40,15 @@ export class UserStatsService {
   }
 
   /**
-   * Compte le nombre de commandes d'un utilisateur
+   * Compte le nombre de commandes d'un utilisateur (excluant les commandes de colis)
    */
   static async getUserOrdersCount(userId: string): Promise<number> {
     try {
       const { count, error } = await supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .not('delivery_instructions', 'like', 'Service de colis:%');
 
       if (error) {
         console.error('❌ Erreur lors du comptage des commandes:', error);
@@ -76,6 +80,28 @@ export class UserStatsService {
       return count || 0;
     } catch (error) {
       console.error('❌ Erreur lors du comptage des réservations:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Compte le nombre de colis d'un utilisateur
+   */
+  static async getUserPackagesCount(userId: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('package_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('❌ Erreur lors du comptage des colis:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('❌ Erreur lors du comptage des colis:', error);
       return 0;
     }
   }

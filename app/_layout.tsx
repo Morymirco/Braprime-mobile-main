@@ -4,32 +4,34 @@ import ToastContainer from '../components/ToastContainer';
 import { AuthProvider } from '../lib/contexts/AuthContext';
 import { CartProvider } from '../lib/contexts/CartContext';
 import { LanguageProvider } from '../lib/contexts/LanguageContext';
+import { ToastProvider } from '../lib/contexts/ToastContext';
 
 export default function RootLayout() {
   return (
     <LanguageProvider>
       <AuthProvider>
         <CartProvider>
-          <SessionPersistenceProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="initial-splash" options={{ headerShown: false }} />
-              <Stack.Screen name="splash" options={{ headerShown: false }} />
-              <Stack.Screen name="select-location" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="login-callback" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="profile" options={{ headerShown: false }} />
-              <Stack.Screen name="wallet" options={{ headerShown: false }} />
-              <Stack.Screen name="payment" options={{ headerShown: false }} />
-              <Stack.Screen name="map" options={{ headerShown: false }} />
-              <Stack.Screen name="reservations" options={{ headerShown: false }} />
-              {/* <Stack.Screen name="google-maps-test" options={{ headerShown: false }} /> */}
-              {/* <Stack.Screen name="places-selection" options={{ headerShown: false }} /> */}
-            </Stack>
-            <ToastContainer />
-          </SessionPersistenceProvider>
-        </CartProvider>
-      </AuthProvider>
+          <ToastProvider>
+            <SessionPersistenceProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="initial-splash" options={{ headerShown: false }} />
+                <Stack.Screen name="splash" options={{ headerShown: false }} />
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="login-callback" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="profile" options={{ headerShown: false }} />
+                <Stack.Screen name="wallet" options={{ headerShown: false }} />
+                <Stack.Screen name="payment" options={{ headerShown: false }} />
+                <Stack.Screen name="map" options={{ headerShown: false }} />
+                <Stack.Screen name="reservations" options={{ headerShown: false }} />
+                {/* <Stack.Screen name="google-maps-test" options={{ headerShown: false }} /> */}
+                {/* <Stack.Screen name="places-selection" options={{ headerShown: false }} /> */}
+              </Stack>
+                              <ToastContainer />
+              </SessionPersistenceProvider>
+            </ToastProvider>
+          </CartProvider>
+        </AuthProvider>
     </LanguageProvider>
   );
 }

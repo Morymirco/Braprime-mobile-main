@@ -62,13 +62,13 @@ export class PaymentService {
     try {
       console.log('🔍 PaymentService: Création du paiement avec les données:', paymentData);
       
-      // Ajouter les URLs de retour pour l'app mobile et fallback vers le client web
+      // Utiliser les mêmes URLs que le client web pour la cohérence
       const paymentDataWithReturnUrls = {
         ...paymentData,
-        return_url: 'braprime://payment-success', // URL de retour pour succès (app mobile)
-        cancel_url: 'braprime://payment-cancel',  // URL de retour pour annulation (app mobile)
+        return_url: 'https://bra-prime-client.vercel.app/order-confirmation', // URL de retour comme le client web
+        cancel_url: 'https://bra-prime-client.vercel.app/payment-failed',  // URL d'annulation comme le client web
         webhook_url: `${this.API_BASE_URL}/api/payments/webhook`, // Webhook pour notifications
-        // URLs de fallback vers le client web (si l'app mobile n'est pas disponible)
+        // URLs de fallback
         success_url: 'https://bra-prime-client.vercel.app/order-confirmation',
         failure_url: 'https://bra-prime-client.vercel.app/payment-failed',
         notify_url: `${this.API_BASE_URL}/api/payments/notify`,

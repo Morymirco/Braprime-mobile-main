@@ -1,7 +1,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Router, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProfileSkeleton from '../../components/ProfileSkeleton';
 import { useProfile } from '../../hooks/useProfile';
@@ -52,13 +52,13 @@ const MENU_ITEMS = [
     showArrow: true,
     onPress: (router: Router) => router.push('/chat'),
   },
-  {
-    id: 'map',
-    title: 'Application de carte par défaut',
-    icon: (props: IconProps) => <MaterialCommunityIcons name="map-marker-outline" {...props} />,
-    showArrow: true,
-    onPress: (router: Router) => router.push('/map/default-map'),
-  },
+  // {
+  //   id: 'map',
+  //   title: 'Application de carte par défaut',
+  //   icon: (props: IconProps) => <MaterialCommunityIcons name="map-marker-outline" {...props} />,
+  //   showArrow: true,
+  //   onPress: (router: Router) => router.push('/map/default-map'),
+  // },
   {
     id: 'terms',
     title: 'Conditions et services',
@@ -85,10 +85,13 @@ const MENU_ITEMS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
-  const { profile, loading, error } = useProfile();
+  const { profile, loading, error, refetch } = useProfile();
   
   // Utiliser le hook pour les statistiques
   const { stats, loading: statsLoading, error: statsError, forceRefresh } = useUserStats(profile?.id);
+  
+  // État pour le pull-to-refresh
+  const [refreshing, setRefreshing] = React.useState(false);
 
   const handleEditName = () => {
     router.push('/profile/edit');
@@ -97,6 +100,21 @@ export default function ProfileScreen() {
   const handleMenuItemPress = (item: typeof MENU_ITEMS[0]) => {
     if (item.onPress) {
       item.onPress(router);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Rafraîchir le profil et les statistiques
+      await Promise.all([
+        refetch(),
+        forceRefresh()
+      ]);
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -148,7 +166,19 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#E31837']} // Android
+            tintColor="#E31837" // iOS
+            title="Actualisation..." // iOS
+            titleColor="#666" // iOS
+          />
+        }
+      >
         {/* User Profile Section */}
         <View style={styles.profileSection}>
           <TouchableOpacity style={styles.userInfo} onPress={handleEditName}>
@@ -159,12 +189,12 @@ export default function ProfileScreen() {
               style={styles.avatar}
             />
             <View style={styles.userNameContainer}>
-              <View style={styles.nameAndEditContainer}>
-                <Text style={styles.userName}>
-                  {profile?.name || 'Nom non défini'}
-                </Text>
-                <Text style={styles.editText}>Modifier</Text>
-              </View>
+              <Text style={styles.userName}>
+                {profile?.name || 'Nom non défini'}
+              </Text>
+              <Text style={styles.userEmail}>
+                {profile?.email || 'Email non défini'}
+              </Text>
             </View>
             <Feather name="chevron-right" size={20} color="#666" style={styles.editArrow} />
           </TouchableOpacity>
@@ -212,6 +242,20 @@ export default function ProfileScreen() {
             </View>
             
             <View style={styles.statCard}>
+              <MaterialIcons name="inventory" size={24} color="#2196F3" />
+              <View style={styles.statContent}>
+                {statsLoading ? (
+                  <View style={styles.statLoading}>
+                    <ActivityIndicator size="small" color="#2196F3" />
+                  </View>
+                ) : (
+                  <Text style={styles.statValue}>{stats.packages}</Text>
+                )}
+                <Text style={styles.statLabel}>Colis</Text>
+              </View>
+            </View>
+            
+            <View style={styles.statCard}>
               <MaterialIcons name="event-available" size={24} color="#4CAF50" />
               <View style={styles.statContent}>
                 {statsLoading ? (
@@ -222,20 +266,6 @@ export default function ProfileScreen() {
                   <Text style={styles.statValue}>{stats.reservations}</Text>
                 )}
                 <Text style={styles.statLabel}>Réservations</Text>
-              </View>
-            </View>
-            
-            <View style={styles.statCard}>
-              <MaterialIcons name="favorite-outline" size={24} color="#FF9800" />
-              <View style={styles.statContent}>
-                {statsLoading ? (
-                  <View style={styles.statLoading}>
-                    <ActivityIndicator size="small" color="#FF9800" />
-                  </View>
-                ) : (
-                  <Text style={styles.statValue}>{stats.favorites}</Text>
-                )}
-                <Text style={styles.statLabel}>Favoris</Text>
               </View>
             </View>
           </View>
@@ -257,7 +287,7 @@ export default function ProfileScreen() {
                 <Text style={styles.menuItemText}>{item.title}</Text>
               </View>
               <Feather 
-                name={item.arrowIcon || 'chevron-right'} 
+                name="chevron-right" 
                 size={20} 
                 color="#666" 
               />
@@ -353,28 +383,21 @@ const styles = StyleSheet.create({
   },
   userNameContainer: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginRight: 8,
-    justifyContent: 'center',
-  },
-  nameAndEditContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
     justifyContent: 'center',
   },
   userName: {
     fontSize: 20,
     fontWeight: 'bold',
     flexShrink: 1,
-    marginRight: 8,
-    textAlign: 'center',
+    textAlign: 'left',
   },
-  editText: {
-    fontSize: 12,
+  userEmail: {
+    fontSize: 14,
     color: '#666',
-    marginLeft: 4,
-    flexShrink: 0,
+    marginTop: 2,
+    textAlign: 'left',
   },
   editArrow: {
     marginLeft: 'auto',

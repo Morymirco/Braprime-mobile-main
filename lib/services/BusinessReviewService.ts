@@ -36,7 +36,30 @@ export const BusinessReviewService = {
         return { data: null, error: error.message };
       }
 
-      return { data: reviews, error: null };
+      // Récupérer les profils utilisateurs pour les avis (comme le client)
+      const reviewsWithProfiles = await Promise.all(
+        (reviews || []).map(async (review) => {
+          if (review.user_id) {
+            const { data: userProfile } = await supabase
+              .from('user_profiles')
+              .select('name, profile_image')
+              .eq('id', review.user_id)
+              .single();
+            
+            return {
+              ...review,
+              user_name: userProfile?.name || 'Utilisateur',
+              user_profile: userProfile
+            };
+          }
+          return {
+            ...review,
+            user_name: 'Utilisateur'
+          };
+        })
+      );
+
+      return { data: reviewsWithProfiles, error: null };
     } catch (error) {
       console.error('Erreur lors de la récupération des avis:', error);
       return { data: null, error: 'Erreur de connexion' };
@@ -103,7 +126,6 @@ export const BusinessReviewService = {
         .from('reviews')
         .insert({
           user_id: user.id,
-          user_name: profile?.name || 'Utilisateur',
           business_id: reviewData.business_id,
           rating: reviewData.rating,
           comment: reviewData.comment || null,

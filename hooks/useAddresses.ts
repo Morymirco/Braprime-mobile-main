@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../lib/contexts/AuthContext';
+import { useToast } from '../lib/contexts/ToastContext';
 import { addressService, CreateAddressData, UpdateAddressData, UserAddress } from '../lib/services/AddressService';
-import { useToast } from './useToast';
 
 export const useAddresses = () => {
   const { user } = useAuth();

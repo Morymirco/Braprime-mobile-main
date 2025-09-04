@@ -17,8 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import CartSkeleton from '../../components/CartSkeleton';
 import ToastContainer from '../../components/ToastContainer';
 import { useCart } from '../../hooks/use-cart';
-import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../lib/contexts/AuthContext';
+import { useToast } from '../../lib/contexts/ToastContext';
 import { MenuItemWithCategory } from '../../lib/services/MenuService';
 
 // Types

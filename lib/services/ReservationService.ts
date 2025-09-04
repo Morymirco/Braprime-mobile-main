@@ -18,8 +18,6 @@ export interface Reservation {
 
 export interface CreateReservationData {
   business_id: number;
-  business_name: string;
-  business_image?: string;
   date: string;
   time: string;
   guests: number;
@@ -60,8 +58,8 @@ export class ReservationService {
         id: item.id,
         user_id: item.user_id,
         business_id: item.business_id,
-        business_name: item.business?.name || item.business_name,
-        business_image: item.business?.cover_image || item.business?.logo || item.business_image,
+        business_name: item.business?.name || 'Commerce non trouvé',
+        business_image: item.business?.cover_image || item.business?.logo,
         date: item.date,
         time: item.time,
         guests: item.guests,
@@ -97,7 +95,6 @@ export class ReservationService {
       const reservationData = {
         user_id: session.user.id,
         business_id: data.business_id,
-        business_name: data.business_name,
         date: data.date,
         time: data.time,
         guests: data.guests,

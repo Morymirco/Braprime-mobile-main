@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
-import { UserStatsService, UserStats } from '../lib/services/UserStatsService';
+import { useCallback, useEffect, useState } from 'react';
+import { UserStats, UserStatsService } from '../lib/services/UserStatsService';
 
 interface UseUserStatsReturn {
   stats: UserStats;
@@ -14,7 +14,8 @@ export const useUserStats = (userId?: string): UseUserStatsReturn => {
   const [stats, setStats] = useState<UserStats>({
     orders: 0,
     reservations: 0,
-    favorites: 0
+    favorites: 0,
+    packages: 0
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

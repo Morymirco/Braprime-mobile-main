@@ -71,14 +71,14 @@ export const useProfile = () => {
     }
   };
 
-  const updateProfile = async (updates: Partial<UserProfile>) => {
+  const updateProfile = async (updates: Partial<UserProfile>): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
       setError(null);
 
       if (!user) {
         setError('Utilisateur non authentifié');
-        return;
+        return { success: false, error: 'Utilisateur non authentifié' };
       }
 
       const { data: updatedProfile, error } = await supabase
@@ -91,7 +91,7 @@ export const useProfile = () => {
       if (error) {
         console.error('❌ Erreur lors de la mise à jour du profil:', error);
         setError(error.message);
-        return;
+        return { success: false, error: error.message };
       }
 
       const transformedProfile: UserProfile = {
@@ -102,9 +102,11 @@ export const useProfile = () => {
 
       setProfile(transformedProfile);
       console.log('✅ Profil mis à jour avec succès:', transformedProfile);
+      return { success: true };
     } catch (err) {
       console.error('❌ Erreur lors de la mise à jour du profil:', err);
       setError('Erreur de connexion');
+      return { success: false, error: 'Erreur de connexion' };
     } finally {
       setLoading(false);
     }

@@ -18,7 +18,7 @@ import { useCart } from '../../../hooks/use-cart';
 import { useBusiness } from '../../../hooks/useBusiness';
 import { useFavorites } from '../../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../../hooks/useMenu';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../lib/contexts/ToastContext';
 import { MenuItemWithCategory } from '../../../lib/services/MenuService';
 
 const { width } = Dimensions.get('window');

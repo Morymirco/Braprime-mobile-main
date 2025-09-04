@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../lib/contexts/ToastContext';
 import Toast from './Toast';
 
 export default function ToastContainer() {
@@ -13,7 +13,7 @@ export default function ToastContainer() {
   return (
     <View style={styles.container} pointerEvents="box-none">
       {toasts.map((toast, index) => (
-        <View key={toast.id} style={[styles.toastWrapper, { top: 50 + index * 80 }]}>
+        <View key={toast.id} style={[styles.toastWrapper, { top: 50 + index * 90 }]}>
           <Toast toast={toast} onHide={hideToast} />
         </View>
       ))}

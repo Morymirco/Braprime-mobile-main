@@ -13,11 +13,30 @@ import {
     View
 } from 'react-native';
 import { useFavorites } from '../hooks/useFavorites';
-import { useToast } from '../hooks/useToast';
 import { useCartContext } from '../lib/contexts/CartContext';
+import { useToast } from '../lib/contexts/ToastContext';
 import { MenuItemWithCategory } from '../lib/services/MenuService';
+import { SelectPackageServiceButton } from './SelectPackageServiceButton';
 
 const { width, height } = Dimensions.get('window');
+
+// Fonction utilitaire pour détecter les services de colis
+const isPackageService = (itemName: string, categoryName?: string): boolean => {
+  const packageKeywords = [
+    'colis', 'package', 'livraison', 'courier', 'logistics',
+    'kg', 'poids', 'dimensions', 'fragile', 'express'
+  ];
+  
+  const packageCategories = [
+    'colis léger', 'colis moyen', 'colis lourd', 'fragile', 'express'
+  ];
+  
+  const itemLower = itemName.toLowerCase();
+  const categoryLower = categoryName?.toLowerCase() || '';
+  
+  return packageKeywords.some(keyword => itemLower.includes(keyword)) ||
+         packageCategories.some(cat => categoryLower.includes(cat));
+};
 
 interface MenuItemDetailProps {
   item: MenuItemWithCategory | null;
@@ -311,23 +330,35 @@ export default function MenuItemDetail({ item, visible, onClose, businessId, bus
             <Text style={styles.totalPrice}>{totalPrice.toLocaleString()} GNF</Text>
           </View>
           
-          <TouchableOpacity
-            style={[
-              styles.addToCartButton,
-              isAddingToCart && styles.addToCartButtonDisabled
-            ]}
-            onPress={handleAddToCart}
-            disabled={isAddingToCart}
-          >
-            {isAddingToCart ? (
-              <MaterialIcons name="hourglass-empty" size={20} color="#FFF" />
-            ) : (
-              <MaterialIcons name="add-shopping-cart" size={20} color="#FFF" />
-            )}
-            <Text style={styles.addToCartText}>
-              {isAddingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}
-            </Text>
-          </TouchableOpacity>
+          {/* Afficher le bon bouton selon le type de service */}
+          {isPackageService(item.name, item.category.name) ? (
+            <SelectPackageServiceButton
+              item={item}
+              categoryName={item.category.name}
+              businessId={businessId || 0}
+              businessName={businessName || ''}
+              variant="default"
+              style={styles.addToCartButton}
+            />
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.addToCartButton,
+                isAddingToCart && styles.addToCartButtonDisabled
+              ]}
+              onPress={handleAddToCart}
+              disabled={isAddingToCart}
+            >
+              {isAddingToCart ? (
+                <MaterialIcons name="hourglass-empty" size={20} color="#FFF" />
+              ) : (
+                <MaterialIcons name="add-shopping-cart" size={20} color="#FFF" />
+              )}
+              <Text style={styles.addToCartText}>
+                {isAddingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>

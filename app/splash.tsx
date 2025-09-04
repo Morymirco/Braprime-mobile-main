@@ -24,17 +24,16 @@ export default function SplashScreen() {
         return;
       }
       
-      console.log('❌ Aucune session, rester sur le splash pour la sélection de langue');
+      console.log('❌ Aucune session, redirection vers la connexion');
+      // Attendre un peu avant de rediriger
+      setTimeout(() => {
+        router.replace('/login');
+      }, 2000);
     } catch (error) {
       console.error('❌ Erreur lors de la vérification:', error);
     }
   };
 
-  const handleLanguageSelect = (language: string) => {
-    // TODO: Set language in storage
-    console.log('🌍 Langue sélectionnée:', language);
-    router.replace('/(tabs)');
-  };
 
   return (
     <View style={styles.container}>
@@ -52,14 +51,14 @@ export default function SplashScreen() {
         
         <TouchableOpacity 
           style={styles.languageButton}
-          onPress={() => handleLanguageSelect('en')}
+          onPress={() => router.replace('/login')}
         >
           <Text style={styles.languageText}>English</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={[styles.languageButton, styles.lastLanguageButton]}
-          onPress={() => handleLanguageSelect('fr')}
+          onPress={() => router.replace('/login')}
         >
           <Text style={styles.languageText}>Français</Text>
         </TouchableOpacity>

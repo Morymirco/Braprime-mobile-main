@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ToastContainer from '../components/ToastContainer';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../lib/contexts/ToastContext';
 import { PaymentService } from '../lib/services/PaymentService';
 
 export default function PaymentConfirmationScreen() {
@@ -26,46 +26,45 @@ export default function PaymentConfirmationScreen() {
   const { pay_id, order_id, status } = params;
 
   useEffect(() => {
-    if (pay_id && order_id) {
+    if (order_id) {
       checkPaymentStatus();
     } else {
-      setError('Paramètres de paiement manquants');
+      setError('ID de commande manquant');
       setLoading(false);
     }
-  }, [pay_id, order_id]);
+  }, [order_id]);
 
   const checkPaymentStatus = async () => {
     try {
       setLoading(true);
-      console.log('🔍 PaymentConfirmation: Vérification du statut du paiement:', { pay_id, order_id });
+      console.log('🔍 PaymentConfirmation: Vérification du statut du paiement avec order_id:', order_id);
 
+      // Utiliser seulement l'order_id pour vérifier le statut
       const response = await PaymentService.checkPaymentStatus({
-        pay_id: pay_id as string,
         order_id: order_id as string,
       });
 
       console.log('🔍 PaymentConfirmation: Réponse du statut:', response);
 
       if (response.success && response.data) {
-        setPaymentStatus(response.data);
+        // Extraire le statut du premier paiement dans la liste
+        const payments = (response.data as any)?.payments || [];
+        const latestPayment = payments.length > 0 ? payments[0] : null;
         
-        // Sauvegarder le paiement en base de données locale
-        await PaymentService.savePaymentToDatabase({
-          order_id: response.data.order_id,
-          pay_id: response.data.pay_id,
-          amount: response.data.amount,
-          method: response.data.method,
-          status: response.data.status,
-          gateway_response: response.data.gateway_response,
-        });
-
-        // Afficher un message de succès ou d'échec
-        if (response.data.status === 'success' || response.data.status === 'SUCCESS') {
-          showToast('success', 'Paiement effectué avec succès !');
-        } else if (response.data.status === 'failed' || response.data.status === 'FAILED') {
-          showToast('error', 'Le paiement a échoué');
+        if (latestPayment) {
+          setPaymentStatus(latestPayment);
+          
+          // Afficher un message selon le statut
+          if (latestPayment.status === 'success' || latestPayment.status === 'completed') {
+            showToast('success', 'Paiement effectué avec succès !');
+          } else if (latestPayment.status === 'failed' || latestPayment.status === 'error') {
+            showToast('error', 'Le paiement a échoué');
+          } else {
+            showToast('info', 'Paiement en cours de traitement...');
+          }
         } else {
-          showToast('info', 'Paiement en cours de traitement...');
+          setError('Aucun paiement trouvé pour cette commande');
+          showToast('error', 'Aucun paiement trouvé');
         }
       } else {
         setError(response.error || 'Impossible de vérifier le statut du paiement');

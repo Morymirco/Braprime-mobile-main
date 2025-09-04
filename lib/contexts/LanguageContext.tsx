@@ -28,7 +28,7 @@ const translations = {
     'profile.signout': 'Se déconnecter',
     'profile.signout.confirm': 'Êtes-vous sûr de vouloir vous déconnecter ?',
     'profile.signout.cancel': 'Annuler',
-    'profile.signout.confirm': 'Déconnecter',
+    'profile.signout.action': 'Déconnecter',
     
     // Language
     'language.french': 'Français',
@@ -47,7 +47,7 @@ const translations = {
     'edit.delete': 'Supprimer le compte',
     'edit.delete.confirm': 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.',
     'edit.delete.cancel': 'Annuler',
-    'edit.delete.confirm': 'Supprimer',
+    'edit.delete.action': 'Supprimer',
     'edit.loading': 'Chargement du profil...',
     'edit.success': 'Profil mis à jour avec succès !',
     'edit.error.name': 'Le nom est obligatoire.',
@@ -94,7 +94,7 @@ const translations = {
     'profile.signout': 'Sign Out',
     'profile.signout.confirm': 'Are you sure you want to sign out?',
     'profile.signout.cancel': 'Cancel',
-    'profile.signout.confirm': 'Sign Out',
+    'profile.signout.action': 'Sign Out',
     
     // Language
     'language.french': 'Français',
@@ -113,7 +113,7 @@ const translations = {
     'edit.delete': 'Delete Account',
     'edit.delete.confirm': 'Are you sure you want to delete your account? This action is irreversible.',
     'edit.delete.cancel': 'Cancel',
-    'edit.delete.confirm': 'Delete',
+    'edit.delete.action': 'Delete',
     'edit.loading': 'Loading profile...',
     'edit.success': 'Profile updated successfully!',
     'edit.error.name': 'Name is required.',
@@ -160,7 +160,7 @@ const translations = {
     'profile.signout': 'تسجيل الخروج',
     'profile.signout.confirm': 'هل أنت متأكد من أنك تريد تسجيل الخروج؟',
     'profile.signout.cancel': 'إلغاء',
-    'profile.signout.confirm': 'تسجيل الخروج',
+    'profile.signout.action': 'تسجيل الخروج',
     
     // Language
     'language.french': 'Français',
@@ -179,7 +179,7 @@ const translations = {
     'edit.delete': 'حذف الحساب',
     'edit.delete.confirm': 'هل أنت متأكد من أنك تريد حذف حسابك؟ هذا الإجراء لا يمكن التراجع عنه.',
     'edit.delete.cancel': 'إلغاء',
-    'edit.delete.confirm': 'حذف',
+    'edit.delete.action': 'حذف',
     'edit.loading': 'جاري تحميل الملف الشخصي...',
     'edit.success': 'تم تحديث الملف الشخصي بنجاح!',
     'edit.error.name': 'الاسم مطلوب.',
@@ -243,13 +243,18 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    return (translations[language] as any)[key] || key;
   };
 
   const isRTL = language === 'ar';
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL }}>
+    <LanguageContext.Provider value={{ 
+      language, 
+      setLanguage, 
+      t, 
+      isRTL
+    }}>
       {children}
     </LanguageContext.Provider>
   );

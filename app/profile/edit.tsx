@@ -5,20 +5,17 @@ import { useEffect, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProfile } from '../../hooks/useProfile';
-import { useLanguage } from '../../lib/contexts/LanguageContext';
 
 export default function EditProfile() {
   const router = useRouter();
   const { profile, updateProfile, updateAvatar, loading, error } = useProfile();
-  const { t } = useLanguage();
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
-  const [website, setWebsite] = useState('');
-  const [city, setCity] = useState('');
-  const [postalCode, setPostalCode] = useState('');
+  const [address, setAddress] = useState('');
+  const [country, setCountry] = useState('');
   const [image, setImage] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -29,9 +26,8 @@ export default function EditProfile() {
       setPhone(profile.phone_number || '');
       setEmail(profile.email || '');
       setBio(profile.bio || '');
-      setWebsite(profile.website || '');
-      setCity(profile.city || '');
-      setPostalCode(profile.postal_code || '');
+      setAddress(profile.address || '');
+      setCountry(profile.country || '');
       setImage(profile.profile_image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&q=80');
     }
   }, [profile]);
@@ -108,7 +104,7 @@ export default function EditProfile() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert(t('common.error'), t('edit.error.name'));
+      Alert.alert('Erreur', 'Le nom est obligatoire');
       return;
     }
 
@@ -118,9 +114,8 @@ export default function EditProfile() {
         name: name.trim(),
         phone_number: phone.trim() || null,
         bio: bio.trim() || null,
-        website: website.trim() || null,
-        city: city.trim() || null,
-        postal_code: postalCode.trim() || null,
+        address: address.trim() || null,
+        country: country.trim() || null,
       };
 
       // Si l'image a changé et n'est pas une URL externe, on pourrait l'uploader ici
@@ -133,16 +128,13 @@ export default function EditProfile() {
       const result = await updateProfile(updates);
       
       if (result.success) {
-        Alert.alert(
-          t('common.success'),
-          t('edit.success'),
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
+        // Retourner directement à la page précédente sans alerte
+        router.back();
       } else {
-        Alert.alert(t('common.error'), result.error || t('edit.error.update'));
+        Alert.alert('Erreur', result.error || 'Erreur lors de la mise à jour');
       }
     } catch (err) {
-      Alert.alert(t('common.error'), t('edit.error.general'));
+      Alert.alert('Erreur', 'Une erreur inattendue s\'est produite');
     } finally {
       setSaving(false);
     }
@@ -150,11 +142,11 @@ export default function EditProfile() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      t('edit.delete'),
-      t('edit.delete.confirm'),
+      'Supprimer le compte',
+      'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.',
       [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('common.delete'), style: 'destructive', onPress: () => {
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: () => {
           // Ici vous pourriez implémenter la suppression du compte
           Alert.alert('Fonctionnalité à venir', 'La suppression de compte sera bientôt disponible.');
         }},
@@ -162,16 +154,6 @@ export default function EditProfile() {
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#E41E31" />
-          <Text style={styles.loadingText}>{t('edit.loading')}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -179,7 +161,7 @@ export default function EditProfile() {
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.title}>{t('edit.title')}</Text>
+        <Text style={styles.title}>Modifier le profil</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -198,7 +180,7 @@ export default function EditProfile() {
           <Text style={styles.sectionTitle}>Informations personnelles</Text>
 
         <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('edit.name')} *</Text>
+            <Text style={styles.label}>Nom complet *</Text>
           <TextInput
             style={styles.input}
             value={name}
@@ -209,7 +191,7 @@ export default function EditProfile() {
         </View>
 
         <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('edit.phone')}</Text>
+            <Text style={styles.label}>Numéro de téléphone</Text>
           <TextInput
             style={styles.input}
             value={phone}
@@ -221,7 +203,7 @@ export default function EditProfile() {
         </View>
 
         <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('edit.email')}</Text>
+            <Text style={styles.label}>Adresse email</Text>
           <TextInput
             style={[styles.input, styles.disabledInput]}
             value={email}
@@ -232,7 +214,7 @@ export default function EditProfile() {
             autoCapitalize="none"
           />
           <Text style={styles.disabledText}>
-              {t('edit.email.disabled')}
+              L'email ne peut pas être modifié
           </Text>
           </View>
 
@@ -252,49 +234,36 @@ export default function EditProfile() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations supplémentaires</Text>
+          <Text style={styles.sectionTitle}>Informations importantes</Text>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Site web</Text>
+            <Text style={styles.label}>Adresse complète</Text>
             <TextInput
-              style={styles.input}
-              value={website}
-              onChangeText={setWebsite}
-              placeholder="https://votre-site.com"
+              style={[styles.input, styles.textArea]}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Entrez votre adresse complète"
               placeholderTextColor="#999"
-              keyboardType="url"
-              autoCapitalize="none"
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
             />
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Ville</Text>
-              <TextInput
-                style={styles.input}
-                value={city}
-                onChangeText={setCity}
-                placeholder="Votre ville"
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Code postal</Text>
-              <TextInput
-                style={styles.input}
-                value={postalCode}
-                onChangeText={setPostalCode}
-                placeholder="Code postal"
-                placeholderTextColor="#999"
-                keyboardType="numeric"
-              />
-            </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Pays</Text>
+            <TextInput
+              style={styles.input}
+              value={country}
+              onChangeText={setCountry}
+              placeholder="Votre pays"
+              placeholderTextColor="#999"
+            />
           </View>
         </View>
 
         <Text style={styles.disclaimer}>
-          {t('edit.disclaimer')}
+          Les informations marquées d'un astérisque (*) sont obligatoires.
         </Text>
 
         <TouchableOpacity 
@@ -303,9 +272,12 @@ export default function EditProfile() {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="white" />
+            <View style={styles.saveButtonLoading}>
+              <ActivityIndicator size="small" color="white" />
+              <Text style={styles.saveButtonLoadingText}>Enregistrement...</Text>
+            </View>
           ) : (
-            <Text style={styles.saveButtonText}>{t('edit.save')}</Text>
+            <Text style={styles.saveButtonText}>Enregistrer</Text>
           )}
         </TouchableOpacity>
 
@@ -313,7 +285,7 @@ export default function EditProfile() {
           style={styles.deleteButton}
           onPress={handleDeleteAccount}
         >
-          <Text style={styles.deleteButtonText}>{t('edit.delete')}</Text>
+          <Text style={styles.deleteButtonText}>Supprimer le compte</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -347,16 +319,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
   },
   avatarContainer: {
     alignSelf: 'center',
@@ -462,6 +424,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  saveButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonLoadingText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   deleteButton: {
     marginTop: 'auto',

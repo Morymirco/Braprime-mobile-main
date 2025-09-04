@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Toast as ToastType } from '../hooks/useToast';
+import { Toast as ToastType } from '../lib/contexts/ToastContext';
 
 interface ToastProps {
   toast: ToastType;
@@ -81,38 +81,63 @@ export default function Toast({ toast, onHide }: ToastProps) {
     }
   };
 
-  const getBackgroundColor = () => {
+  const getToastStyle = () => {
     switch (toast.type) {
       case 'success':
-        return '#00C853';
+        return {
+          backgroundColor: '#10B981', // Vert BraPrime
+          borderColor: '#059669',
+          iconColor: '#FFFFFF',
+        };
       case 'error':
-        return '#E31837';
+        return {
+          backgroundColor: '#E31837', // Rouge BraPrime principal
+          borderColor: '#C41E3A',
+          iconColor: '#FFFFFF',
+        };
       case 'warning':
-        return '#FF9800';
+        return {
+          backgroundColor: '#F59E0B', // Orange BraPrime
+          borderColor: '#D97706',
+          iconColor: '#FFFFFF',
+        };
       case 'info':
-        return '#2196F3';
+        return {
+          backgroundColor: '#3B82F6', // Bleu BraPrime
+          borderColor: '#2563EB',
+          iconColor: '#FFFFFF',
+        };
       default:
-        return '#2196F3';
+        return {
+          backgroundColor: '#E31837', // Rouge BraPrime par défaut
+          borderColor: '#C41E3A',
+          iconColor: '#FFFFFF',
+        };
     }
   };
+
+  const toastStyle = getToastStyle();
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          backgroundColor: getBackgroundColor(),
+          backgroundColor: toastStyle.backgroundColor,
+          borderColor: toastStyle.borderColor,
           transform: [{ translateY }],
           opacity,
         },
       ]}
     >
       <View style={styles.content}>
-        <MaterialIcons name={getIconName()} size={24} color="#FFF" />
-        <Text style={styles.message}>{toast.message}</Text>
+        <View style={styles.iconContainer}>
+          <MaterialIcons name={getIconName()} size={22} color={toastStyle.iconColor} />
+        </View>
+        <Text style={[styles.message, { color: toastStyle.iconColor }]}>{toast.message}</Text>
       </View>
       <TouchableOpacity style={styles.closeButton} onPress={handleHide}>
-        <MaterialIcons name="close" size={20} color="#FFF" />
+        <MaterialIcons name="close" size={18} color={toastStyle.iconColor} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -124,19 +149,20 @@ const styles = StyleSheet.create({
     top: 50,
     left: 16,
     right: 16,
-    borderRadius: 8,
+    borderRadius: 12, // Coins plus arrondis pour BraPrime
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1, // Bordure pour plus de définition
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4, // Ombre plus prononcée
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8, // Élévation plus importante
     zIndex: 1000,
   },
   content: {
@@ -144,14 +170,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Fond semi-transparent pour l'icône
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   message: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: '600', // Police plus grasse pour BraPrime
     flex: 1,
+    lineHeight: 20,
   },
   closeButton: {
-    padding: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Fond semi-transparent pour le bouton
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 }); 

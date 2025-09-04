@@ -15,8 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import FavoritesSkeleton from '../components/FavoritesSkeleton';
 import ToastContainer from '../components/ToastContainer';
 import { useFavorites } from '../hooks/useFavorites';
-import { useToast } from '../hooks/useToast';
 import { useAuth } from '../lib/contexts/AuthContext';
+import { useToast } from '../lib/contexts/ToastContext';
 
 const { width } = Dimensions.get('window');
 

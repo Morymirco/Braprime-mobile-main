@@ -16,15 +16,35 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessDetailSkeleton from '../../components/BusinessDetailSkeleton';
 import MenuItemDetail from '../../components/MenuItemDetail';
 import MenuSkeleton from '../../components/MenuSkeleton';
+import { PackageSelectionModal } from '../../components/PackageSelectionModal';
+import { SelectPackageServiceButton } from '../../components/SelectPackageServiceButton';
 import ToastContainer from '../../components/ToastContainer';
 import { useCart } from '../../hooks/use-cart';
 import { useBusiness } from '../../hooks/useBusiness';
 import { useBusinessReview } from '../../hooks/useBusinessReview';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useMenuCategories, useMenuItems } from '../../hooks/useMenu';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../lib/contexts/ToastContext';
 
 const { width } = Dimensions.get('window');
+
+// Fonction utilitaire pour détecter les services de colis
+const isPackageService = (itemName: string, categoryName?: string): boolean => {
+  const packageKeywords = [
+    'colis', 'package', 'livraison', 'courier', 'logistics',
+    'kg', 'poids', 'dimensions', 'fragile', 'express'
+  ];
+  
+  const packageCategories = [
+    'colis léger', 'colis moyen', 'colis lourd', 'fragile', 'express'
+  ];
+  
+  const itemLower = itemName.toLowerCase();
+  const categoryLower = categoryName?.toLowerCase() || '';
+  
+  return packageKeywords.some(keyword => itemLower.includes(keyword)) ||
+         packageCategories.some(cat => categoryLower.includes(cat));
+};
 
 export default function BusinessDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -48,6 +68,10 @@ export default function BusinessDetailScreen() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteMenuItems, setFavoriteMenuItems] = useState<Set<number>>(new Set());
   const [favoritesChecked, setFavoritesChecked] = useState(false);
+  
+  // État pour le modal de colis
+  const [packageModalVisible, setPackageModalVisible] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
 
   // Vérifier l'état des favoris au chargement (une seule fois)
   useEffect(() => {
@@ -230,6 +254,16 @@ export default function BusinessDetailScreen() {
   const handleCloseModal = useCallback(() => {
     setModalVisible(false);
     setSelectedMenuItem(null);
+  }, []);
+
+  const handleOpenPackageModal = useCallback((service: any) => {
+    setSelectedService(service);
+    setPackageModalVisible(true);
+  }, []);
+
+  const handleClosePackageModal = useCallback(() => {
+    setPackageModalVisible(false);
+    setSelectedService(null);
   }, []);
 
   const handleGiveReview = useCallback(() => {
@@ -547,23 +581,39 @@ export default function BusinessDetailScreen() {
                           <Text style={styles.menuItemPrice}>
                             {item.price.toLocaleString()} GNF
                           </Text>
-                          <TouchableOpacity 
+                          {/* Utiliser SelectPackageServiceButton pour détecter automatiquement les services de colis */}
+                          <SelectPackageServiceButton
+                            item={item}
+                            categoryName={item.category.name}
+                            businessId={business?.id || 0}
+                            businessName={business?.name || ''}
+                            variant="icon"
                             style={[
                               styles.addToCartButton,
                               addingToCart === item.id && styles.addToCartButtonLoading
                             ]}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              handleQuickAddToCart(item);
-                            }}
-                            disabled={addingToCart === item.id}
-                          >
-                            {addingToCart === item.id ? (
-                              <MaterialIcons name="hourglass-empty" size={20} color="#E31837" />
-                            ) : (
-                              <MaterialIcons name="add-shopping-cart" size={20} color="#E31837" />
-                            )}
-                          </TouchableOpacity>
+                          />
+                          
+                          {/* Bouton d'ajout au panier normal (affiché seulement si ce n'est pas un service de colis) */}
+                          {!isPackageService(item.name, item.category.name) && (
+                            <TouchableOpacity 
+                              style={[
+                                styles.addToCartButton,
+                                addingToCart === item.id && styles.addToCartButtonLoading
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleQuickAddToCart(item);
+                              }}
+                              disabled={addingToCart === item.id}
+                            >
+                              {addingToCart === item.id ? (
+                                <MaterialIcons name="hourglass-empty" size={20} color="#E31837" />
+                              ) : (
+                                <MaterialIcons name="add-shopping-cart" size={20} color="#E31837" />
+                              )}
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -617,6 +667,14 @@ export default function BusinessDetailScreen() {
           <View style={styles.deliveryItem}>
             <MaterialIcons name="local-shipping" size={20} color="#666" />
             <Text style={styles.deliveryText}>Frais de livraison: {business.delivery_fee.toLocaleString()} GNF</Text>
+          </View>
+
+          {/* Note sur les services de colis */}
+          <View style={styles.packageServiceNote}>
+            <MaterialIcons name="info" size={16} color="#3B82F6" />
+            <Text style={styles.packageServiceNoteText}>
+              Les services de colis sont disponibles dans le menu ci-dessous
+            </Text>
           </View>
         </View>
 
@@ -740,6 +798,18 @@ export default function BusinessDetailScreen() {
         businessId={business?.id}
         businessName={business?.name}
       />
+
+      {/* Modal de sélection de colis */}
+      {selectedService && (
+        <PackageSelectionModal
+          isOpen={packageModalVisible}
+          onClose={handleClosePackageModal}
+          service={selectedService}
+          businessId={business?.id || 0}
+          businessName={business?.name || ''}
+          categoryName={business?.business_type?.name || ''}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1259,5 +1329,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  packageServiceNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  packageServiceNoteText: {
+    color: '#1976D2',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
   },
 }); 

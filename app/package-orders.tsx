@@ -14,8 +14,9 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import PackageOrdersSkeleton from '../components/PackageOrdersSkeleton';
 import { useAuth } from '../lib/contexts/AuthContext';
-import { supabase } from '../lib/supabase/config';
+import { PackageOrderService } from '../lib/services/PackageOrderService';
 
 const { width } = Dimensions.get('window');
 
@@ -169,164 +170,53 @@ export default function PackageOrdersScreen() {
       setLoading(true);
       setError(null);
 
-      // Récupérer les commandes de colis depuis la table package_orders
-      const { data: packageOrdersData, error: packageOrdersError } = await supabase
-        .from('package_orders')
-        .select(`
-          *,
-          orders (
-            id,
-            total,
-            delivery_fee,
-            grand_total,
-            status,
-            created_at,
-            updated_at,
-            delivery_method,
-            payment_method
-          ),
-          businesses (
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Utiliser notre service PackageOrderService (comme le client)
+      const packageOrdersData = await PackageOrderService.getUserPackageOrders();
 
-      if (packageOrdersError) {
-        console.error('❌ Erreur lors de la récupération des commandes de colis:', packageOrdersError);
-        setError('Erreur lors du chargement des colis');
-        return;
-      }
-
-      // Récupérer aussi les order_items pour chaque commande
-      const { data: orders, error: ordersError } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_items (
-            id,
-            name,
-            price,
-            quantity,
-            special_instructions
-          )
-        `)
-        .eq('user_id', user.id)
-        .like('delivery_instructions', 'Service de colis%')
-        .order('created_at', { ascending: false });
-
-      if (ordersError) {
-        console.error('❌ Erreur lors de la récupération des commandes de colis:', ordersError);
-        setError('Erreur lors du chargement des colis');
-        return;
-      }
-
-      // Transformer les données en utilisant package_orders et regrouper par commande
-      const ordersMap = new Map<string, PackageOrder>();
-      
-      // D'abord, créer une map des commandes avec leurs order_items
-      const ordersWithItemsMap = new Map<string, any>();
-      (orders || []).forEach(order => {
-        ordersWithItemsMap.set(order.id, order);
-      });
-      
-      // Ensuite, traiter chaque packageOrder
-      (packageOrdersData || []).forEach(packageOrder => {
-        // Debug: Afficher les données reçues
-        console.log('🔍 DEBUG - PackageOrder reçu:', packageOrder);
-        
-        // Trouver la commande correspondante
-        const order = ordersWithItemsMap.get(packageOrder.order_id);
-        
-        // Extraire le nom du business de manière sécurisée
-        let businessName = 'Service de colis';
-        if (packageOrder.businesses) {
-          if (typeof packageOrder.businesses === 'object' && packageOrder.businesses.name) {
-            businessName = packageOrder.businesses.name;
-          } else if (typeof packageOrder.businesses === 'string') {
-            businessName = packageOrder.businesses;
+      // Transformer les données du service en format PackageOrder pour l'interface
+      const transformedOrders: PackageOrder[] = packageOrdersData.map(order => ({
+        id: order.id,
+        date: new Date(order.created_at),
+        total: order.total_amount,
+        status: order.status as PackageOrderStatus,
+        items: order.order_items?.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          specialInstructions: item.special_instructions,
+          packageDetails: {
+            weight: order.package_details?.weight || 'Non spécifié',
+            dimensions: order.package_details?.dimensions || 'Non spécifié',
+            description: order.package_details?.description || 'Colis standard',
+            isFragile: order.package_details?.is_fragile || false,
+            isUrgent: order.package_details?.is_urgent || false
           }
+        })) || [],
+        businessName: 'Service de colis',
+        serviceName: order.service_name,
+        pickupAddress: order.pickup_address?.address || '',
+        deliveryAddress: order.delivery_address?.address || '',
+        deliveryMethod: 'delivery' as const,
+        paymentMethod: 'cash' as const,
+        customerInfo: {
+          name: order.customer_info?.name || '',
+          phone: order.customer_info?.phone || '',
+          email: order.customer_info?.email || ''
+        },
+        deliveryPreferences: {
+          preferredTime: order.delivery_preferences?.preferred_time || '',
+          pickupDate: order.delivery_preferences?.pickup_date || '',
+          pickupTime: order.delivery_preferences?.pickup_time || '',
+          dropDate: order.delivery_preferences?.drop_date || '',
+          dropTime: order.delivery_preferences?.drop_time || '',
+          contactMethod: (order.delivery_preferences?.contact_method as 'phone' | 'email' | 'both') || 'phone'
         }
-        
-        // Si la commande existe déjà, ajouter seulement les détails du package
-        if (ordersMap.has(packageOrder.order_id)) {
-          const existingOrder = ordersMap.get(packageOrder.order_id)!;
-          
-          // Ajouter seulement les détails du package (pas les items qui sont déjà là)
-          const packageDetails = {
-            weight: packageOrder.package_weight,
-            dimensions: packageOrder.package_dimensions || 'Non spécifié',
-            description: packageOrder.package_description || 'Colis standard',
-            isFragile: packageOrder.is_fragile,
-            isUrgent: packageOrder.is_urgent
-          };
-          
-          // Mettre à jour le total
-          existingOrder.total += packageOrder.service_price;
-          
-          console.log('🔍 DEBUG - Détails du package ajoutés à la commande existante');
-        } else {
-          // Créer une nouvelle commande avec tous les order_items (sans doublons)
-          const uniqueItems = new Map<string, any>();
-          (order?.order_items || []).forEach(item => {
-            if (!uniqueItems.has(item.id)) {
-              uniqueItems.set(item.id, {
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity,
-                specialInstructions: item.special_instructions,
-                packageDetails: {
-                  weight: packageOrder.package_weight,
-                  dimensions: packageOrder.package_dimensions || 'Non spécifié',
-                  description: packageOrder.package_description || 'Colis standard',
-                  isFragile: packageOrder.is_fragile,
-                  isUrgent: packageOrder.is_urgent
-                }
-              });
-            }
-          });
-          
-          const transformedOrder: PackageOrder = {
-            id: packageOrder.order_id,
-            date: new Date(packageOrder.created_at),
-            total: packageOrder.service_price,
-            status: packageOrder.status as PackageOrderStatus,
-            items: Array.from(uniqueItems.values()),
-            businessName: businessName,
-            serviceName: packageOrder.service_name,
-            pickupAddress: packageOrder.pickup_address,
-            deliveryAddress: packageOrder.delivery_address,
-            deliveryMethod: (order?.delivery_method as 'delivery' | 'pickup') || 'delivery',
-            paymentMethod: order?.payment_method || 'cash',
-            customerInfo: {
-              name: packageOrder.customer_name,
-              phone: packageOrder.customer_phone,
-              email: packageOrder.customer_email
-            },
-            deliveryPreferences: {
-              preferredTime: packageOrder.preferred_time || '',
-              pickupDate: packageOrder.pickup_date || '',
-              pickupTime: packageOrder.pickup_time || '',
-              dropDate: packageOrder.drop_date || '',
-              dropTime: packageOrder.drop_time || '',
-              contactMethod: (packageOrder.contact_method as 'phone' | 'email' | 'both') || 'phone'
-            }
-          };
-          
-          ordersMap.set(packageOrder.order_id, transformedOrder);
-          console.log('🔍 DEBUG - Nouvelle commande créée avec', uniqueItems.size, 'items uniques');
-          console.log('🔍 DEBUG - IDs des items:', Array.from(uniqueItems.keys()));
-        }
-      });
-      
-      // Convertir la Map en tableau
-      const transformedOrders: PackageOrder[] = Array.from(ordersMap.values());
-      
-      // Debug: Vérifier le nombre d'items dans chaque commande
+      }));
+
+      console.log('🔍 DEBUG - Commandes transformées:', transformedOrders.length);
       transformedOrders.forEach(order => {
         console.log('🔍 DEBUG - Commande', order.id.slice(0, 8), 'contient', order.items.length, 'items');
-        console.log('🔍 DEBUG - Items:', order.items.map(item => item.id));
       });
 
       setPackageOrders(transformedOrders);
@@ -493,9 +383,7 @@ export default function PackageOrdersScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Mes Colis</Text>
         </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement des colis...</Text>
-        </View>
+        <PackageOrdersSkeleton />
       </SafeAreaView>
     );
   }
@@ -920,15 +808,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
   },
   errorContainer: {
     flex: 1,

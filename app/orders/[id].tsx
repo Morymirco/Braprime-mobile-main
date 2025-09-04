@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ToastContainer from '../../components/ToastContainer';
-import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../lib/contexts/AuthContext';
+import { useToast } from '../../lib/contexts/ToastContext';
 import { orderService, type Order } from '../../lib/services/OrderService';
 
 export default function OrderTrackingScreen() {

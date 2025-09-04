@@ -2,6 +2,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     ScrollView,
     StyleSheet,
@@ -217,9 +218,16 @@ export default function BusinessReviewScreen() {
               onPress={handleSubmit}
               disabled={rating === 0 || submitting}
             >
-              <Text style={styles.submitButtonText}>
-                {submitting ? 'Enregistrement...' : (userReview ? 'Mettre à jour' : 'Envoyer l\'avis')}
-              </Text>
+              {submitting ? (
+                <View style={styles.submitButtonLoading}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.submitButtonText}>Enregistrement...</Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  {userReview ? 'Mettre à jour' : 'Envoyer l\'avis'}
+                </Text>
+              )}
             </TouchableOpacity>
 
             {userReview && (
@@ -428,6 +436,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  submitButtonLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteButton: {
     backgroundColor: 'transparent',
