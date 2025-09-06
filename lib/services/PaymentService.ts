@@ -67,11 +67,9 @@ export class PaymentService {
         ...paymentData,
         return_url: 'https://bra-prime-client.vercel.app/order-confirmation', // URL de retour comme le client web
         cancel_url: 'https://bra-prime-client.vercel.app/payment-failed',  // URL d'annulation comme le client web
-        webhook_url: `${this.API_BASE_URL}/api/payments/webhook`, // Webhook pour notifications
         // URLs de fallback
         success_url: 'https://bra-prime-client.vercel.app/order-confirmation',
         failure_url: 'https://bra-prime-client.vercel.app/payment-failed',
-        notify_url: `${this.API_BASE_URL}/api/payments/notify`,
       };
       
       console.log('🔍 PaymentService: Données avec URLs de retour:', paymentDataWithReturnUrls);

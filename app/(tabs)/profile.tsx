@@ -40,6 +40,13 @@ const MENU_ITEMS = [
     onPress: (router: Router) => router.push('/favorites'),
   },
   {
+    id: 'settings',
+    title: 'Paramètres',
+    icon: (props: IconProps) => <Ionicons name="settings-outline" {...props} />,
+    showArrow: true,
+    onPress: (router: Router) => router.push('/profile/settings'),
+  },
+  {
     id: 'language',
     title: 'Langue',
     icon: (props: IconProps) => <MaterialCommunityIcons name="translate" {...props} />,
@@ -161,7 +168,10 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Mon Compte</Text>
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => router.push('/profile/settings')}
+        >
           <Ionicons name="settings-outline" size={24} color="black" />
         </TouchableOpacity>
       </View>

@@ -1,8 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     ScrollView,
     StyleSheet,
     Text,
@@ -22,12 +23,79 @@ export default function PaymentConfirmationScreen() {
   const [loading, setLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const { pay_id, order_id, status } = params;
 
   useEffect(() => {
     if (order_id) {
       checkPaymentStatus();
+      
+      // Animation de pulsation pour le statut "pending"
+      if (paymentStatus?.status?.toLowerCase() === 'pending') {
+        const pulseAnimation = Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulseAnim, {
+              toValue: 1.2,
+              duration: 1000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(pulseAnim, {
+              toValue: 1,
+              duration: 1000,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        pulseAnimation.start();
+        
+        return () => pulseAnimation.stop();
+      }
+      
+      // Vérifier périodiquement le statut si c'est encore "pending"
+      const interval = setInterval(async () => {
+        try {
+          console.log('🔄 Vérification périodique du statut...');
+          const response = await PaymentService.checkPaymentStatus({
+            order_id: order_id as string,
+          });
+          
+          if (response.success && response.data) {
+            const payments = (response.data as any)?.payments || [];
+            const latestPayment = payments.length > 0 ? payments[0] : null;
+            
+            console.log('🔄 Statut actuel:', latestPayment?.status);
+            
+            if (latestPayment) {
+              // Toujours mettre à jour le statut local
+              setPaymentStatus(latestPayment);
+              
+              if (latestPayment.status !== 'pending') {
+                // Le statut a changé, arrêter la vérification périodique
+                console.log('✅ Statut changé, arrêt de la vérification périodique');
+                clearInterval(interval);
+                
+                if (latestPayment.status === 'success' || latestPayment.status === 'completed') {
+                  showToast('success', 'Paiement effectué avec succès !');
+                } else if (latestPayment.status === 'failed' || latestPayment.status === 'error') {
+                  showToast('error', 'Le paiement a échoué');
+                } else {
+                  showToast('info', `Statut du paiement: ${latestPayment.status}`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ Erreur lors de la vérification périodique:', error);
+        }
+      }, 3000); // Vérifier toutes les 3 secondes
+      
+      // Nettoyer l'intervalle après 30 secondes
+      setTimeout(() => {
+        clearInterval(interval);
+      }, 30000);
+      
+      return () => clearInterval(interval);
     } else {
       setError('ID de commande manquant');
       setLoading(false);
@@ -52,15 +120,18 @@ export default function PaymentConfirmationScreen() {
         const latestPayment = payments.length > 0 ? payments[0] : null;
         
         if (latestPayment) {
+          console.log('🔍 PaymentConfirmation: Statut trouvé:', latestPayment.status);
           setPaymentStatus(latestPayment);
           
-          // Afficher un message selon le statut
+          // Afficher un message selon le statut réel en base de données
           if (latestPayment.status === 'success' || latestPayment.status === 'completed') {
             showToast('success', 'Paiement effectué avec succès !');
           } else if (latestPayment.status === 'failed' || latestPayment.status === 'error') {
             showToast('error', 'Le paiement a échoué');
-          } else {
+          } else if (latestPayment.status === 'pending') {
             showToast('info', 'Paiement en cours de traitement...');
+          } else {
+            showToast('info', `Statut du paiement: ${latestPayment.status}`);
           }
         } else {
           setError('Aucun paiement trouvé pour cette commande');
@@ -185,13 +256,69 @@ export default function PaymentConfirmationScreen() {
 
         {/* Statut du paiement */}
         <View style={styles.statusContainer}>
-          {getStatusIcon(paymentStatus?.status)}
+          {paymentStatus?.status?.toLowerCase() === 'pending' ? (
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              {getStatusIcon(paymentStatus?.status)}
+            </Animated.View>
+          ) : (
+            getStatusIcon(paymentStatus?.status)
+          )}
           <Text style={styles.statusTitle}>
             {getStatusTitle(paymentStatus?.status)}
           </Text>
           <Text style={styles.statusMessage}>
             {getStatusMessage(paymentStatus?.status)}
           </Text>
+          
+          {/* Badge de statut */}
+          <View style={[
+            styles.statusBadge,
+            paymentStatus?.status?.toLowerCase() === 'success' && styles.statusBadgeSuccess,
+            paymentStatus?.status?.toLowerCase() === 'failed' && styles.statusBadgeFailed,
+            paymentStatus?.status?.toLowerCase() === 'pending' && styles.statusBadgePending,
+          ]}>
+            <Text style={styles.statusBadgeText}>
+              {PaymentService.getStatusLabel(paymentStatus?.status)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Indicateur de progression */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressTitle}>Étapes du paiement</Text>
+          <View style={styles.progressSteps}>
+            <View style={[styles.progressStep, styles.progressStepCompleted]}>
+              <View style={styles.progressStepIcon}>
+                <MaterialIcons name="payment" size={20} color="#FFF" />
+              </View>
+              <Text style={styles.progressStepText}>Paiement initié</Text>
+            </View>
+            
+            <View style={[styles.progressLine, 
+              paymentStatus?.status?.toLowerCase() !== 'pending' && styles.progressLineCompleted
+            ]} />
+            
+            <View style={[styles.progressStep, 
+              paymentStatus?.status?.toLowerCase() !== 'pending' && styles.progressStepCompleted
+            ]}>
+              <View style={[styles.progressStepIcon,
+                paymentStatus?.status?.toLowerCase() !== 'pending' && styles.progressStepIconCompleted
+              ]}>
+                <MaterialIcons 
+                  name={paymentStatus?.status?.toLowerCase() === 'success' ? "check" : 
+                        paymentStatus?.status?.toLowerCase() === 'failed' ? "close" : "hourglass-empty"} 
+                  size={20} 
+                  color={paymentStatus?.status?.toLowerCase() !== 'pending' ? "#FFF" : "#666"} 
+                />
+              </View>
+              <Text style={[styles.progressStepText,
+                paymentStatus?.status?.toLowerCase() !== 'pending' && styles.progressStepTextCompleted
+              ]}>
+                {paymentStatus?.status?.toLowerCase() === 'success' ? 'Paiement réussi' :
+                 paymentStatus?.status?.toLowerCase() === 'failed' ? 'Paiement échoué' : 'En cours de traitement'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Détails du paiement */}
@@ -218,7 +345,13 @@ export default function PaymentConfirmationScreen() {
             
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Statut</Text>
-              <Text style={[styles.detailValue, styles.statusValue]}>
+              <Text style={[
+                styles.detailValue, 
+                styles.statusValue,
+                paymentStatus.status?.toLowerCase() === 'success' && styles.statusSuccess,
+                paymentStatus.status?.toLowerCase() === 'failed' && styles.statusFailed,
+                paymentStatus.status?.toLowerCase() === 'pending' && styles.statusPending,
+              ]}>
                 {PaymentService.getStatusLabel(paymentStatus.status)}
               </Text>
             </View>
@@ -318,6 +451,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerTitle: {
     fontSize: 24,
@@ -329,6 +470,16 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     marginBottom: 16,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statusTitle: {
     fontSize: 24,
@@ -348,6 +499,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 24,
     marginBottom: 16,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   detailsTitle: {
     fontSize: 18,
@@ -378,9 +539,105 @@ const styles = StyleSheet.create({
   statusValue: {
     fontWeight: 'bold',
   },
+  statusSuccess: {
+    color: '#4CAF50',
+  },
+  statusFailed: {
+    color: '#E31837',
+  },
+  statusPending: {
+    color: '#FF9800',
+  },
+  statusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+  statusBadgeSuccess: {
+    backgroundColor: '#E8F5E8',
+  },
+  statusBadgeFailed: {
+    backgroundColor: '#FFEBEE',
+  },
+  statusBadgePending: {
+    backgroundColor: '#FFF3E0',
+  },
+  statusBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  progressContainer: {
+    backgroundColor: '#fff',
+    padding: 24,
+    marginBottom: 16,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  progressTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  progressSteps: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressStep: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  progressStepCompleted: {
+    opacity: 1,
+  },
+  progressStepIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E31837',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  progressStepIconCompleted: {
+    backgroundColor: '#4CAF50',
+  },
+  progressStepText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  progressStepTextCompleted: {
+    color: '#000',
+    fontWeight: '600',
+  },
+  progressLine: {
+    height: 2,
+    backgroundColor: '#e0e0e0',
+    flex: 1,
+    marginHorizontal: 10,
+    marginTop: -20,
+  },
+  progressLineCompleted: {
+    backgroundColor: '#4CAF50',
+  },
   actionsContainer: {
     padding: 24,
     gap: 16,
+    marginBottom: 32,
   },
   buttonContainer: {
     gap: 16,
@@ -393,6 +650,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    shadowColor: '#E31837',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   primaryButtonText: {
     color: '#FFF',
@@ -407,6 +672,14 @@ const styles = StyleSheet.create({
     borderColor: '#E31837',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   secondaryButtonText: {
     color: '#E31837',

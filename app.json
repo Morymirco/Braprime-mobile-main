@@ -11,6 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bratech.prime",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBQ8uIPeWgjk9692eBJ_Tch51tPRDahU9Y"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison.",
@@ -24,6 +27,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.bratech.prime",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBQ8uIPeWgjk9692eBJ_Tch51tPRDahU9Y"
+        }
+      },
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -46,7 +54,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
     ],
     "experiments": {
       "typedRoutes": true

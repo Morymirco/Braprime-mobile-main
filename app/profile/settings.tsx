@@ -4,11 +4,9 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
-import { useLanguage } from '../../lib/contexts/LanguageContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { t } = useLanguage();
   const { preferences, updatePreferences, loading } = useUserPreferences();
   
   const [notifications, setNotifications] = useState(preferences.notifications);
@@ -145,7 +143,7 @@ export default function SettingsScreen() {
               <Ionicons name="location-outline" size={24} color="black" />
               <View style={styles.settingTexts}>
                 <Text style={styles.settingText}>Partager ma localisation</Text>
-                <Text style={styles.settingSubtext}>Autoriser l'accès à votre position</Text>
+                <Text style={styles.settingSubtext}>Autoriser l&apos;accès à votre position</Text>
               </View>
             </View>
             <Switch
@@ -177,7 +175,7 @@ export default function SettingsScreen() {
               <Ionicons name="analytics-outline" size={24} color="black" />
               <View style={styles.settingTexts}>
                 <Text style={styles.settingText}>Analytics</Text>
-                <Text style={styles.settingSubtext}>Partager les données d'utilisation</Text>
+                <Text style={styles.settingSubtext}>Partager les données d&apos;utilisation</Text>
               </View>
             </View>
             <Switch
@@ -237,6 +235,93 @@ export default function SettingsScreen() {
                   {preferences.currency === 'GNF' ? 'Franc guinéen' : 
                    preferences.currency === 'USD' ? 'Dollar américain' : 'Euro'}
                 </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Google Maps Test Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tests Google Maps</Text>
+          
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/map-api-test')}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="map-outline" size={24} color="black" />
+              <View style={styles.settingTexts}>
+                <Text style={styles.settingText}>Test clé API Google Maps</Text>
+                <Text style={styles.settingSubtext}>Vérifier que la clé API fonctionne</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/map-test')}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="map" size={24} color="black" />
+              <View style={styles.settingTexts}>
+                <Text style={styles.settingText}>Test de carte interactive</Text>
+                <Text style={styles.settingSubtext}>Tester toutes les fonctionnalités de Google Maps</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/location-picker-simple')}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="location-outline" size={24} color="black" />
+              <View style={styles.settingTexts}>
+                <Text style={styles.settingText}>Sélecteur de localisation</Text>
+                <Text style={styles.settingSubtext}>Choisir une adresse par recherche</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => {
+              Alert.alert(
+                'Fonctionnalité à venir',
+                'Le planificateur d\'itinéraire sera disponible dans une prochaine version avec l\'intégration complète des cartes.',
+                [{ text: 'OK' }]
+              );
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="navigate-outline" size={24} color="black" />
+              <View style={styles.settingTexts}>
+                <Text style={styles.settingText}>Planificateur d'itinéraire</Text>
+                <Text style={styles.settingSubtext}>Bientôt disponible</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => {
+              Alert.alert(
+                'Fonctionnalité à venir',
+                'La recherche de lieux à proximité sera disponible dans une prochaine version avec l\'intégration complète des cartes.',
+                [{ text: 'OK' }]
+              );
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="business-outline" size={24} color="black" />
+              <View style={styles.settingTexts}>
+                <Text style={styles.settingText}>Lieux à proximité</Text>
+                <Text style={styles.settingSubtext}>Bientôt disponible</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#666" />

@@ -2,17 +2,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AddressAutocomplete from '../components/AddressAutocomplete';
 import CommuneQuartierSelector from '../components/CommuneQuartierSelector';
 import PaymentWebView from '../components/PaymentWebView';
 import ToastContainer from '../components/ToastContainer';
@@ -25,7 +26,7 @@ import { PaymentRequest, PaymentService } from '../lib/services/PaymentService';
 export default function CheckoutScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { cart, loading, loadingStates } = useCart();
+  const { cart, loading, loadingStates, clearCart } = useCart();
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
@@ -52,8 +53,21 @@ export default function CheckoutScreen() {
   const [showPaymentWebView, setShowPaymentWebView] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string>('');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'orange_money' | 'mtn_money'>('orange_money');
 
   const paymentMethod = 'card' as const; // Paiement en ligne obligatoire
+  
+  // Fonction pour mapper les méthodes de paiement UI vers API
+  const getPaymentMethodCode = (uiMethod: string): string => {
+    switch (uiMethod) {
+      case 'orange_money':
+        return 'lp-om-gn'; // Code API pour Orange Money Guinea
+      case 'mtn_money':
+        return 'lp-mtn-gn'; // Code API pour MTN Money Guinea
+      default:
+        return 'mobile_money'; // Fallback
+    }
+  };
 
   // Pré-remplir les informations personnelles depuis le profil utilisateur
   useEffect(() => {
@@ -103,8 +117,16 @@ export default function CheckoutScreen() {
     
     const requiredFields = [formData.firstName, formData.lastName, formData.phone];
     
-    if (deliveryMethod === 'delivery' && !formData.address.trim()) {
-      return false;
+    if (deliveryMethod === 'delivery') {
+      // Validation de l'adresse
+      if (!formData.address.trim()) {
+        return false;
+      }
+      
+      // Validation que l'adresse contient une virgule (adresse complète sélectionnée)
+      if (!formData.address.includes(',')) {
+        return false;
+      }
     }
     
     // Validation commune et quartier pour la livraison
@@ -198,14 +220,14 @@ export default function CheckoutScreen() {
 
       console.log('🔍 DEBUG - Données de commande préparées:', orderData);
 
-      // Créer la commande sans vider le panier pour l'instant
+      // Créer la commande
       const { success, orderId, error: orderError } = await createOrderWithoutClearingCart(orderData, cart || undefined);
       
       if (success && orderId) {
         console.log('✅ Commande créée avec succès:', orderId);
         setCurrentOrderId(orderId);
         
-        // Créer le paiement via Lengo Pay
+        // Créer le paiement via Lengo Pay (le panier sera vidé après l'ouverture de la WebView)
         await handleCreatePayment(orderId);
       } else {
         showToast('error', orderError || 'Impossible de créer la commande. Veuillez réessayer.');
@@ -236,7 +258,7 @@ export default function CheckoutScreen() {
         user_id: user.id,
         amount: grandTotal,
         currency: 'GNF',
-        payment_method: 'mobile_money',
+        payment_method: getPaymentMethodCode(selectedPaymentMethod), // Utiliser le code API correct
         phone_number: formData.phone.trim(),
         order_number: orderId, // Utiliser l'ID de commande comme numéro
         business_name: cart.is_multi_service ? 'Multi-services' : (cart.business_name || 'BraPrime'),
@@ -264,6 +286,16 @@ export default function CheckoutScreen() {
         setPaymentUrl(paymentResponse.payment_url);
         setShowPaymentWebView(true);
         showToast('success', 'Redirection vers le paiement...');
+        
+        // Vider le panier après l'ouverture de la WebView
+        setTimeout(async () => {
+          try {
+            await clearCart();
+            console.log('🛒 Panier vidé après ouverture de la WebView de paiement');
+          } catch (error) {
+            console.error('❌ Erreur lors du vidage du panier:', error);
+          }
+        }, 1000); // Attendre 1 seconde pour que la WebView s'ouvre
       } else {
         throw new Error(paymentResponse.error || 'Erreur lors de la création du paiement');
       }
@@ -336,8 +368,8 @@ export default function CheckoutScreen() {
     router.back();
   };
 
-  // Rediriger vers le panier si pas d'articles
-  if (!loading && (!cart || cart.items.length === 0)) {
+  // Rediriger vers le panier si pas d'articles (sauf si WebView de paiement ouverte)
+  if (!loading && (!cart || cart.items.length === 0) && !showPaymentWebView) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -650,18 +682,37 @@ export default function CheckoutScreen() {
               <Text style={styles.sectionTitle}>Adresse de livraison</Text>
             </View>
             <View style={styles.sectionContent}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Adresse complète *</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={formData.address}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
-                  placeholder="Votre adresse complète"
-                  placeholderTextColor="#999"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
+              {/* Message informatif pour les frais estimés */}
+              {!formData.address && (
+                <View style={styles.infoContainer}>
+                  <View style={styles.infoHeader}>
+                    <MaterialIcons name="info" size={16} color="#FF9800" />
+                    <Text style={styles.infoTitle}>💡 Frais de livraison estimés</Text>
+                  </View>
+                  <Text style={styles.infoText}>
+                    Saisissez votre adresse pour obtenir un calcul précis des frais de livraison basé sur la distance réelle.
+                  </Text>
+                </View>
+              )}
+
+              {/* Autocomplétion d'adresse avec carte */}
+              <AddressAutocomplete
+                value={formData.address}
+                onChange={(address) => setFormData(prev => ({ ...prev, address }))}
+                onPlaceSelect={(place) => {
+                  if (place && place.formatted_address) {
+                    setFormData(prev => ({ ...prev, address: place.formatted_address }));
+                  }
+                }}
+                placeholder="Rechercher et sélectionner une adresse valide..."
+                label="Adresse complète"
+                required={true}
+                showMap={true}
+              />
+              
+              <Text style={styles.addressHint}>
+                ⚠️ Veuillez sélectionner une adresse depuis la liste pour garantir la validité
+              </Text>
 
               {/* Sélection commune et quartier */}
               <View style={styles.locationSelectorContainer}>
@@ -709,16 +760,47 @@ export default function CheckoutScreen() {
             <Text style={styles.sectionTitle}>Mode de paiement</Text>
           </View>
           <View style={styles.sectionContent}>
-            <View style={styles.paymentMethodCard}>
-              <Text style={styles.paymentEmoji}>💳</Text>
+            <Text style={styles.paymentSubtitle}>Choisissez votre méthode de paiement :</Text>
+            
+            {/* Orange Money */}
+            <TouchableOpacity 
+              style={[
+                styles.paymentMethodCard,
+                selectedPaymentMethod === 'orange_money' && styles.paymentMethodCardSelected
+              ]}
+              onPress={() => setSelectedPaymentMethod('orange_money')}
+            >
+              <Text style={styles.paymentEmoji}>🧡</Text>
               <View style={styles.paymentMethodContent}>
-                <Text style={styles.paymentMethodTitle}>Paiement en ligne obligatoire</Text>
+                <Text style={styles.paymentMethodTitle}>Orange Money</Text>
                 <Text style={styles.paymentMethodDescription}>
-                  Orange Money / MTN Money via Lengo Pay
+                  Paiement via votre compte Orange Money
                 </Text>
               </View>
-              <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
-            </View>
+              {selectedPaymentMethod === 'orange_money' && (
+                <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
+              )}
+            </TouchableOpacity>
+
+            {/* MTN Money */}
+            <TouchableOpacity 
+              style={[
+                styles.paymentMethodCard,
+                selectedPaymentMethod === 'mtn_money' && styles.paymentMethodCardSelected
+              ]}
+              onPress={() => setSelectedPaymentMethod('mtn_money')}
+            >
+              <Text style={styles.paymentEmoji}>📱</Text>
+              <View style={styles.paymentMethodContent}>
+                <Text style={styles.paymentMethodTitle}>MTN Money</Text>
+                <Text style={styles.paymentMethodDescription}>
+                  Paiement via votre compte MTN Money
+                </Text>
+              </View>
+              {selectedPaymentMethod === 'mtn_money' && (
+                <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -952,14 +1034,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  paymentSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 16,
+  },
   paymentMethodCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#e0e0e0',
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  paymentMethodCardSelected: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#f8fff8',
   },
   paymentEmoji: {
     fontSize: 24,
@@ -1230,5 +1323,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 12,
+  },
+  // Styles pour les messages informatifs
+  infoContainer: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9800',
+    marginLeft: 6,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#F57C00',
+    lineHeight: 16,
+  },
+  addressHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
 }); 
