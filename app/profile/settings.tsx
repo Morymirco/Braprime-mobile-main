@@ -292,7 +292,7 @@ export default function SettingsScreen() {
             onPress={() => {
               Alert.alert(
                 'Fonctionnalité à venir',
-                'Le planificateur d\'itinéraire sera disponible dans une prochaine version avec l\'intégration complète des cartes.',
+                'Le planificateur d&apos;itinéraire sera disponible dans une prochaine version avec l&apos;intégration complète des cartes.',
                 [{ text: 'OK' }]
               );
             }}
@@ -300,7 +300,7 @@ export default function SettingsScreen() {
             <View style={styles.settingLeft}>
               <Ionicons name="navigate-outline" size={24} color="black" />
               <View style={styles.settingTexts}>
-                <Text style={styles.settingText}>Planificateur d'itinéraire</Text>
+                <Text style={styles.settingText}>Planificateur d&apos;itinéraire</Text>
                 <Text style={styles.settingSubtext}>Bientôt disponible</Text>
               </View>
             </View>
@@ -312,7 +312,7 @@ export default function SettingsScreen() {
             onPress={() => {
               Alert.alert(
                 'Fonctionnalité à venir',
-                'La recherche de lieux à proximité sera disponible dans une prochaine version avec l\'intégration complète des cartes.',
+                'La recherche de lieux à proximité sera disponible dans une prochaine version avec l&apos;intégration complète des cartes.',
                 [{ text: 'OK' }]
               );
             }}
@@ -326,6 +326,39 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={24} color="#666" />
           </TouchableOpacity>
+        </View>
+
+        {/* Notifications Test Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tests Notifications</Text>
+          
+        <TouchableOpacity 
+          style={styles.settingItem}
+          onPress={() => router.push('/notifications-test')}
+        >
+          <View style={styles.settingLeft}>
+            <Ionicons name="notifications-outline" size={24} color="black" />
+            <View style={styles.settingTexts}>
+              <Text style={styles.settingText}>Test des notifications</Text>
+              <Text style={styles.settingSubtext}>Tester les notifications push</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#666" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingItem}
+          onPress={() => router.push('/send-notifications-test')}
+        >
+          <View style={styles.settingLeft}>
+            <Ionicons name="send-outline" size={24} color="black" />
+            <View style={styles.settingTexts}>
+              <Text style={styles.settingText}>Envoi de notifications</Text>
+              <Text style={styles.settingSubtext}>Tester l&apos;envoi de notifications</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#666" />
+        </TouchableOpacity>
         </View>
 
         {/* Reset Section */}

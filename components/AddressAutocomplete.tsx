@@ -2,8 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
   Modal,
   StatusBar as RNStatusBar,
   ScrollView,
@@ -48,9 +46,9 @@ export default function AddressAutocomplete({
   showMap = false,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<Place[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [justSelected, setJustSelected] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -83,9 +81,19 @@ export default function AddressAutocomplete({
     };
   }, [showMapModal]);
 
+  // Réinitialiser justSelected après un court délai
+  useEffect(() => {
+    if (justSelected) {
+      const timer = setTimeout(() => {
+        setJustSelected(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [justSelected]);
+
   // Debounce pour éviter trop de requêtes
   useEffect(() => {
-    if (!value || value.length < 3) {
+    if (!value || value.length < 3 || justSelected) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -96,7 +104,7 @@ export default function AddressAutocomplete({
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [value]);
+  }, [value, justSelected]);
 
   // Debounce pour la recherche sur la carte
   useEffect(() => {
@@ -116,7 +124,6 @@ export default function AddressAutocomplete({
   const searchPlaces = async (query: string) => {
     if (!query || query.length < 3) return;
 
-    setIsLoading(true);
     try {
       // Utilisation de l'API Google Places pour des résultats réels
       const apiKey = MAPS_CONFIG.GOOGLE_MAPS_API_KEY;
@@ -173,31 +180,20 @@ export default function AddressAutocomplete({
       }
     } catch (error) {
       console.error('Erreur lors de la recherche d\'adresses:', error);
-      // En cas d'erreur, utiliser des suggestions de base
-      const errorPlaces: Place[] = [
-        {
-          place_id: 'error_1',
-          formatted_address: `${query}, Conakry, Guinée`,
-          name: query,
-          geometry: {
-            location: {
-              lat: 9.6412,
-              lng: -13.5784,
-            },
-          },
-        },
-      ];
-      
-      setSuggestions(errorPlaces);
-      setShowSuggestions(true);
-    } finally {
-      setIsLoading(false);
+      // En cas d'erreur, ne pas afficher de suggestions
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
   };
 
   const handlePlaceSelect = (place: Place) => {
-    onChange(place.formatted_address);
+    // Fermer les suggestions immédiatement
     setShowSuggestions(false);
+    setJustSelected(true);
+    
+    // Mettre à jour la valeur
+    onChange(place.formatted_address);
+    
     if (onPlaceSelect) {
       onPlaceSelect(place);
     }
@@ -205,9 +201,16 @@ export default function AddressAutocomplete({
 
   const handleInputChange = (text: string) => {
     onChange(text);
-    if (text.length >= 3) {
-      setShowSuggestions(true);
-    } else {
+    
+    // Si une sélection vient d'être faite, ne pas rouvrir les suggestions
+    if (justSelected) {
+      return;
+    }
+    
+    // Le debounce dans useEffect se chargera de la recherche
+    // On ne fait que gérer l'affichage immédiat
+    if (text.length < 3) {
+      setSuggestions([]);
       setShowSuggestions(false);
     }
   };
@@ -358,7 +361,11 @@ export default function AddressAutocomplete({
   const renderSuggestion = ({ item }: { item: Place }) => (
     <TouchableOpacity
       style={styles.suggestionItem}
-      onPress={() => handlePlaceSelect(item)}
+      activeOpacity={0.7}
+      onPress={(e) => {
+        e.stopPropagation();
+        handlePlaceSelect(item);
+      }}
     >
       <Ionicons name="location-outline" size={20} color="#666" />
       <View style={styles.suggestionContent}>
@@ -369,7 +376,7 @@ export default function AddressAutocomplete({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="box-none">
       <StatusBar style="auto" />
       {label && (
         <Text style={styles.label}>
@@ -378,7 +385,7 @@ export default function AddressAutocomplete({
         </Text>
       )}
       
-      <View style={styles.inputContainer}>
+      <View style={styles.inputContainer} pointerEvents="auto">
         <TextInput
           style={styles.input}
           value={value}
@@ -392,30 +399,33 @@ export default function AddressAutocomplete({
         {showMap && (
           <TouchableOpacity
             style={styles.mapButton}
-            onPress={() => setShowMapModal(true)}
+            onPress={(e) => {
+              e.stopPropagation();
+              setShowSuggestions(false);
+              setShowMapModal(true);
+            }}
           >
             <Ionicons name="map-outline" size={20} color="#E31837" />
           </TouchableOpacity>
         )}
         
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#E31837" />
-          </View>
-        )}
       </View>
 
       {/* Suggestions */}
       {showSuggestions && suggestions.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          <FlatList
-            data={suggestions}
-            renderItem={renderSuggestion}
-            keyExtractor={(item) => item.place_id}
+        <View style={styles.suggestionsContainer} pointerEvents="box-none">
+          <ScrollView
             style={styles.suggestionsList}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
-          />
+            pointerEvents="auto"
+          >
+            {suggestions.map((item) => (
+              <View key={item.place_id} pointerEvents="auto">
+                {renderSuggestion({ item })}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -592,11 +602,6 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#f5f5f5',
     borderRadius: 6,
-  },
-  loadingContainer: {
-    position: 'absolute',
-    right: 50,
-    top: 12,
   },
   suggestionsContainer: {
     position: 'absolute',

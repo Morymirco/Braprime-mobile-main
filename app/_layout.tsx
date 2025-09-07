@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import PushNotificationBanner from '../components/PushNotificationBanner';
 import { SessionPersistenceProvider } from '../components/SessionPersistenceProvider';
 import ToastContainer from '../components/ToastContainer';
 import { AuthProvider } from '../lib/contexts/AuthContext';
@@ -27,11 +28,12 @@ export default function RootLayout() {
                 {/* <Stack.Screen name="google-maps-test" options={{ headerShown: false }} /> */}
                 {/* <Stack.Screen name="places-selection" options={{ headerShown: false }} /> */}
               </Stack>
-                              <ToastContainer />
-              </SessionPersistenceProvider>
-            </ToastProvider>
-          </CartProvider>
-        </AuthProvider>
+              <ToastContainer />
+              <PushNotificationBanner />
+            </SessionPersistenceProvider>
+          </ToastProvider>
+        </CartProvider>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

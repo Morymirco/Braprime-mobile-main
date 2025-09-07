@@ -1,16 +1,16 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AddressAutocomplete from '../components/AddressAutocomplete';
@@ -379,7 +379,7 @@ export default function CheckoutScreen() {
             Ajoutez des articles à votre panier avant de passer à la caisse.
           </Text>
           <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-            <MaterialIcons name="arrow-back" size={20} color="#E31837" />
+            <Ionicons name="chevron-back" size={20} color="#E31837" />
             <Text style={styles.backButtonText}>Retour au panier</Text>
           </TouchableOpacity>
         </View>
@@ -405,7 +405,7 @@ export default function CheckoutScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <MaterialIcons name="arrow-back" size={24} color="#000" />
+          <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Finaliser la commande</Text>
         <View style={styles.headerSpacer} />
@@ -760,6 +760,17 @@ export default function CheckoutScreen() {
             <Text style={styles.sectionTitle}>Mode de paiement</Text>
           </View>
           <View style={styles.sectionContent}>
+            {/* Message informatif pour le paiement en ligne obligatoire */}
+            <View style={styles.paymentInfoContainer}>
+              <View style={styles.paymentInfoHeader}>
+                <MaterialIcons name="info" size={16} color="#2196F3" />
+                <Text style={styles.paymentInfoTitle}>💳 Paiement en ligne obligatoire</Text>
+              </View>
+              <Text style={styles.paymentInfoText}>
+                Le paiement en ligne est obligatoire pour toutes les commandes.
+              </Text>
+            </View>
+            
             <Text style={styles.paymentSubtitle}>Choisissez votre méthode de paiement :</Text>
             
             {/* Orange Money */}
@@ -1355,5 +1366,30 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     fontStyle: 'italic',
+  },
+  // Styles pour les messages informatifs de paiement
+  paymentInfoContainer: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+  },
+  paymentInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  paymentInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginLeft: 6,
+  },
+  paymentInfoText: {
+    fontSize: 12,
+    color: '#1565C0',
+    lineHeight: 16,
   },
 }); 

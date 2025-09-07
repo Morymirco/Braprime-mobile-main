@@ -927,13 +927,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#000',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
+    marginTop: 4,
   },
   content: {
     flex: 1,
@@ -944,9 +945,17 @@ const styles = StyleSheet.create({
   itemCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
@@ -968,8 +977,8 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: '600',
+    color: '#333',
     flex: 1,
     marginRight: 8,
   },
@@ -1091,8 +1100,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E31837',
-    paddingVertical: 16,
-    borderRadius: 8,
+    paddingVertical: 18,
+    borderRadius: 12,
+    shadowColor: '#E31837',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
   checkoutButtonLoading: {
     backgroundColor: '#CCC',
@@ -1100,7 +1117,7 @@ const styles = StyleSheet.create({
   checkoutButtonText: {
     color: '#FFF',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginLeft: 8,
   },
   emptyContainer: {
@@ -1415,12 +1432,20 @@ const styles = StyleSheet.create({
     color: '#E31837',
   },
   businessSection: {
-    backgroundColor: '#f8f8f8',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   businessHeader: {
     flexDirection: 'row',
@@ -1434,8 +1459,8 @@ const styles = StyleSheet.create({
   },
   businessName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: '600',
+    color: '#333',
     marginLeft: 8,
   },
   businessSummary: {

@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../lib/contexts/AuthContext';
 import { useToast } from '../lib/contexts/ToastContext';
 import { MultiPackageInfo, PackageItem, PackageOrderService } from '../lib/services/PackageOrderService';
+import AddressAutocomplete from './AddressAutocomplete';
 
 export interface PackageSelectionModalProps {
   isOpen: boolean;
@@ -302,14 +303,13 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             </View>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Adresse de départ *</Text>
-              <TextInput
-                style={styles.textInput}
+              <AddressAutocomplete
                 value={packageInfo.pickup_address}
-                onChangeText={(text) => setPackageInfo({...packageInfo, pickup_address: text})}
+                onChange={(address) => setPackageInfo({...packageInfo, pickup_address: address})}
                 placeholder="Adresse de départ pour tous les colis"
-                placeholderTextColor="#999"
-                multiline
+                label="Adresse de départ"
+                required={true}
+                showMap={true}
               />
             </View>
             
@@ -478,14 +478,13 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
                 {/* Destination spécifique */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Adresse de livraison *</Text>
-                  <TextInput
-                    style={styles.textInput}
+                  <AddressAutocomplete
                     value={pkg.delivery_address}
-                    onChangeText={(text) => updatePackage(pkg.id, { delivery_address: text })}
+                    onChange={(address) => updatePackage(pkg.id, { delivery_address: address })}
                     placeholder={`Adresse de livraison pour le colis ${index + 1}`}
-                    placeholderTextColor="#999"
-                    multiline
+                    label={`Adresse de livraison - Colis ${index + 1}`}
+                    required={true}
+                    showMap={true}
                   />
                 </View>
 

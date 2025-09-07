@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AuthService, AuthUser } from '../services/AuthService';
+import PushTokenService from '../services/PushTokenService';
 import { SessionService, UserSession } from '../services/SessionService';
 
 interface AuthContextType {
@@ -139,6 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(true);
       setSessionValid(true);
       
+      // Initialiser les notifications push
+      try {
+        await PushTokenService.initializeNotifications(currentUser.id, currentUser);
+        console.log('✅ Notifications push initialisées');
+      } catch (pushError) {
+        console.warn('⚠️ Erreur lors de l\'initialisation des notifications:', pushError);
+      }
+      
       console.log('✅ Session synchronisée avec succès');
     } catch (err) {
       console.error('❌ Erreur lors de la synchronisation avec Supabase:', err);
@@ -192,6 +201,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(authUser);
           setIsAuthenticated(true);
           setSessionValid(true);
+          
+          // Initialiser les notifications push
+          try {
+            await PushTokenService.initializeNotifications(authUser.id, authUser);
+            console.log('✅ Notifications push initialisées après connexion');
+          } catch (pushError) {
+            console.warn('⚠️ Erreur lors de l\'initialisation des notifications:', pushError);
+          }
+          
           return { success: true };
         }
       }
@@ -240,6 +258,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(authUser);
           setIsAuthenticated(true);
           setSessionValid(true);
+          
+          // Initialiser les notifications push
+          try {
+            await PushTokenService.initializeNotifications(authUser.id, authUser);
+            console.log('✅ Notifications push initialisées après inscription');
+          } catch (pushError) {
+            console.warn('⚠️ Erreur lors de l\'initialisation des notifications:', pushError);
+          }
+          
           return { success: true };
         }
       }
@@ -264,6 +291,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         setError(error);
         return { error: { message: error } };
+      }
+      
+      // Nettoyer les tokens push avant la déconnexion
+      if (user) {
+        try {
+          await PushTokenService.cleanupOnLogout(user.id);
+        } catch (pushError) {
+          console.warn('⚠️ Erreur lors du nettoyage des tokens push:', pushError);
+        }
       }
       
       // Effacer la session locale

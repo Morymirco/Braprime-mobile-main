@@ -293,8 +293,10 @@ export default function ProfileScreen() {
               onPress={() => handleMenuItemPress(item)}
             >
               <View style={styles.menuItemLeft}>
-                {item.icon({ size: 24, color: 'black' })}
-                <Text style={styles.menuItemText}>{item.title}</Text>
+                {item.icon({ size: 24, color: '#333' })}
+                <View style={styles.menuItemTexts}>
+                  <Text style={styles.menuItemText}>{item.title}</Text>
+                </View>
               </View>
               <Feather 
                 name="chevron-right" 
@@ -503,11 +505,16 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  menuItemTexts: {
+    marginLeft: 12,
+    flex: 1,
   },
   menuItemText: {
     fontSize: 16,
-    marginLeft: 12,
-    color: '#000',
+    color: '#333',
+    marginBottom: 2,
   },
   logoutButton: {
     backgroundColor: '#E31837',

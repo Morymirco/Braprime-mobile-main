@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -198,7 +198,7 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
       {/* Search Header */}
       <View style={styles.searchHeader}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <MaterialIcons name="arrow-back" size={24} color="#000" />
+          <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
         <View style={styles.searchContainer}>
           <MaterialIcons name="search" size={20} color="#666" />

@@ -160,7 +160,11 @@ export default function MenuItemDetail({ item, visible, onClose, businessId, bus
     return stars;
   };
 
-  const totalPrice = item.price * quantity;
+  // Pour les services de colis, le prix est fixe (pas de quantité)
+  // Pour les autres services, on multiplie par la quantité
+  const totalPrice = isPackageService(item.name, item.category_name) 
+    ? item.price 
+    : item.price * quantity;
 
   return (
     <Modal
@@ -238,43 +242,45 @@ export default function MenuItemDetail({ item, visible, onClose, businessId, bus
               </View>
             )}
 
-            {/* Sélection de quantité */}
-            <View style={styles.quantityContainer}>
-              <Text style={styles.sectionTitle}>Quantité</Text>
-              <View style={styles.quantitySelector}>
-                <TouchableOpacity
-                  style={[
-                    styles.quantityButton,
-                    quantity <= 1 && styles.quantityButtonDisabled
-                  ]}
-                  onPress={() => handleQuantityChange(quantity - 1)}
-                  disabled={quantity <= 1}
-                >
-                  <MaterialIcons 
-                    name="remove" 
-                    size={20} 
-                    color={quantity <= 1 ? "#CCC" : "#E31837"} 
-                  />
-                </TouchableOpacity>
-                
-                <Text style={styles.quantityText}>{quantity}</Text>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.quantityButton,
-                    quantity >= 99 && styles.quantityButtonDisabled
-                  ]}
-                  onPress={() => handleQuantityChange(quantity + 1)}
-                  disabled={quantity >= 99}
-                >
-                  <MaterialIcons 
-                    name="add" 
-                    size={20} 
-                    color={quantity >= 99 ? "#CCC" : "#E31837"} 
-                  />
-                </TouchableOpacity>
+            {/* Sélection de quantité - masquée pour les services de colis */}
+            {!isPackageService(item.name, item.category_name) && (
+              <View style={styles.quantityContainer}>
+                <Text style={styles.sectionTitle}>Quantité</Text>
+                <View style={styles.quantitySelector}>
+                  <TouchableOpacity
+                    style={[
+                      styles.quantityButton,
+                      quantity <= 1 && styles.quantityButtonDisabled
+                    ]}
+                    onPress={() => handleQuantityChange(quantity - 1)}
+                    disabled={quantity <= 1}
+                  >
+                    <MaterialIcons 
+                      name="remove" 
+                      size={20} 
+                      color={quantity <= 1 ? "#CCC" : "#E31837"} 
+                    />
+                  </TouchableOpacity>
+                  
+                  <Text style={styles.quantityText}>{quantity}</Text>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.quantityButton,
+                      quantity >= 99 && styles.quantityButtonDisabled
+                    ]}
+                    onPress={() => handleQuantityChange(quantity + 1)}
+                    disabled={quantity >= 99}
+                  >
+                    <MaterialIcons 
+                      name="add" 
+                      size={20} 
+                      color={quantity >= 99 ? "#CCC" : "#E31837"} 
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Instructions spéciales */}
             <View style={styles.instructionsContainer}>
@@ -326,7 +332,9 @@ export default function MenuItemDetail({ item, visible, onClose, businessId, bus
         {/* Boutons d'action */}
         <View style={styles.actionContainer}>
           <View style={styles.totalContainer}>
-            <Text style={styles.totalLabel}>Total:</Text>
+            <Text style={styles.totalLabel}>
+              {isPackageService(item.name, item.category_name) ? 'Prix du service:' : 'Total:'}
+            </Text>
             <Text style={styles.totalPrice}>{totalPrice.toLocaleString()} GNF</Text>
           </View>
           
