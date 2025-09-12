@@ -132,7 +132,7 @@ const OrdersList = () => {
           </TouchableOpacity>
         )}
 
-        {item.status === 'delivered' && !item.customer_rating && (
+        {item.status === 'delivered' && !item.customer_rating && item.driver_id && (
           <TouchableOpacity
             style={styles.rateButton}
             onPress={() => handleRateOrder(item.id)}

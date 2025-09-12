@@ -1,6 +1,7 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Dimensions, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessTypesGrid from '../../components/BusinessTypesGrid';
 import BusinessTypesSkeleton from '../../components/BusinessTypesSkeleton';
@@ -34,9 +35,10 @@ const BANNERS = [
 ];
 
 export default function HomeScreen() {
-  const { businessTypes, loading, error } = useBusinessTypes();
+  const { businessTypes, loading, error, refetch } = useBusinessTypes();
   const { unreadCount } = useNotifications();
   const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
 
   // Fonction pour formater le nom du type de commerce
   const formatBusinessTypeName = (name: string) => {
@@ -85,6 +87,18 @@ export default function HomeScreen() {
     router.push('/notifications');
   };
 
+  // Fonction de gestion du refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (error) {
+      console.error('Erreur lors du refresh de la page d\'accueil:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Address Header */}
@@ -121,7 +135,18 @@ export default function HomeScreen() {
         </Text>
       </TouchableOpacity>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#E31837']}
+            tintColor="#E31837"
+          />
+        }
+      >
         {/* Scrollable Banners */}
         <ScrollView
           horizontal

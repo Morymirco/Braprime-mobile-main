@@ -2,11 +2,14 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useLanguage } from '../lib/contexts/LanguageContext';
 import { SessionService } from '../lib/services/SessionService';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
+  const { setLanguage } = useLanguage();
+  
   useEffect(() => {
     // Vérifier l'authentification au chargement
     checkAuthentication();
@@ -51,14 +54,20 @@ export default function SplashScreen() {
         
         <TouchableOpacity 
           style={styles.languageButton}
-          onPress={() => router.replace('/login')}
+          onPress={async () => {
+            await setLanguage('en');
+            router.replace('/login');
+          }}
         >
           <Text style={styles.languageText}>English</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={[styles.languageButton, styles.lastLanguageButton]}
-          onPress={() => router.replace('/login')}
+          onPress={async () => {
+            await setLanguage('fr');
+            router.replace('/login');
+          }}
         >
           <Text style={styles.languageText}>Français</Text>
         </TouchableOpacity>

@@ -7,6 +7,7 @@ import {
     FlatList,
     Linking,
     Modal,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -47,6 +48,11 @@ interface LocalOrder {
   driverPhone?: string;
   customer_rating?: number;
   customer_review?: string;
+  // Champs pour les commandes groupées
+  is_grouped?: boolean;
+  group_orders?: LocalOrder[];
+  group_total?: number;
+  group_delivery_fee?: number;
 }
 
 // Helper function to get status badge color
@@ -125,7 +131,7 @@ const getStatusText = (status: OrderStatus) => {
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { orders, loading, error, cancelOrder, rateOrder } = useOrders();
+  const { orders, loading, error, cancelOrder, rateOrder, refreshOrders } = useOrders();
 
   const [selectedOrder, setSelectedOrder] = useState<LocalOrder | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
@@ -136,6 +142,7 @@ export default function OrdersScreen() {
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'past3months' | 'older'>('all');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Debug: Afficher les commandes reçues
   console.log('🔍 DEBUG - Commandes reçues du hook:', orders);
@@ -156,7 +163,7 @@ export default function OrdersScreen() {
       specialInstructions: item.special_instructions,
       image: item.image
     })),
-    businessName: order.business_id ? `Business ${order.business_id}` : 'Business inconnu', // business_name n'existe pas
+    businessName: order.business_name || (order.business_id ? `Business ${order.business_id}` : 'Business inconnu'),
     deliveryAddress: order.delivery_address || '',
     deliveryMethod: order.delivery_method,
     paymentMethod: order.payment_method,
@@ -164,7 +171,12 @@ export default function OrdersScreen() {
     driverName: undefined, // driver_name n'existe pas
     driverPhone: undefined, // driver_phone n'existe pas
     customer_rating: order.customer_rating,
-    customer_review: order.customer_review
+    customer_review: order.customer_review,
+    // Champs pour les commandes groupées
+    is_grouped: order.is_grouped || false,
+    group_orders: order.group_orders || [],
+    group_total: order.group_total || order.grand_total,
+    group_delivery_fee: order.group_delivery_fee || order.delivery_fee
   })), [orders]);
 
   console.log('🔍 DEBUG - Commandes converties:', localOrders.length);
@@ -195,6 +207,18 @@ export default function OrdersScreen() {
 
     return { recentOrders: recent, past3MonthsOrders: past3Months, olderOrders: older };
   }, [filteredOrders]);
+
+  // Fonction de gestion du refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshOrders();
+    } catch (error) {
+      console.error('Erreur lors du refresh des commandes:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Get orders for current tab
   const getCurrentTabOrders = () => {
@@ -295,7 +319,15 @@ export default function OrdersScreen() {
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.businessName}>{item.businessName}</Text>
+          <View style={styles.businessNameContainer}>
+            <Text style={styles.businessName}>{item.businessName}</Text>
+            {item.is_grouped && (
+              <View style={styles.groupedBadge}>
+                <MaterialIcons name="group" size={12} color="#fff" />
+                <Text style={styles.groupedBadgeText}>Groupée</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.orderDate}>Commande #{item.id}</Text>
           <Text style={styles.orderDate}>{formatDate(item.date)}</Text>
         </View>
@@ -309,10 +341,15 @@ export default function OrdersScreen() {
 
       <View style={styles.orderDetails}>
         <Text style={styles.orderTotal}>
-          Total: {formatCurrency(item.total)}
+          Total: {formatCurrency(item.is_grouped ? (item.group_total || item.total) : item.total)}
         </Text>
         <Text style={styles.itemsCount}>
           {item.items.length} {item.items.length === 1 ? 'article' : 'articles'}
+          {item.is_grouped && item.group_orders && (
+            <Text style={styles.groupedInfo}>
+              {' '}({item.group_orders.length} services)
+            </Text>
+          )}
         </Text>
         
         {/* Aperçu des items */}
@@ -326,6 +363,23 @@ export default function OrdersScreen() {
             {item.items.length > 2 && (
               <Text style={styles.moreItemsText}>
                 +{item.items.length - 2} autres articles...
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Aperçu des services groupés */}
+        {item.is_grouped && item.group_orders && item.group_orders.length > 0 && (
+          <View style={styles.groupedServicesPreview}>
+            <Text style={styles.groupedServicesTitle}>Services inclus:</Text>
+            {item.group_orders.slice(0, 2).map((groupOrder, index) => (
+              <Text key={index} style={styles.groupedServiceItem}>
+                • {groupOrder.businessName}
+              </Text>
+            ))}
+            {item.group_orders.length > 2 && (
+              <Text style={styles.moreServicesText}>
+                +{item.group_orders.length - 2} autres services...
               </Text>
             )}
           </View>
@@ -406,7 +460,17 @@ export default function OrdersScreen() {
         <Text style={styles.title}>Mes Commandes</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#E31837']}
+            tintColor="#E31837"
+          />
+        }
+      >
         {/* Search and Filter */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
@@ -523,8 +587,9 @@ export default function OrdersScreen() {
           contentContainerStyle={styles.ordersListContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmptyState}
+          scrollEnabled={false}
         />
-      </View>
+      </ScrollView>
 
       {/* Order Details Modal */}
       <Modal
@@ -562,7 +627,33 @@ export default function OrdersScreen() {
 
               {/* Order Items */}
               <View style={styles.modalSection}>
-                <Text style={styles.sectionTitle}>Articles commandés</Text>
+                <Text style={styles.sectionTitle}>
+                  {selectedOrder.is_grouped ? 'Articles des services groupés' : 'Articles commandés'}
+                </Text>
+                
+                {/* Afficher les services groupés si c'est une commande groupée */}
+                {selectedOrder.is_grouped && selectedOrder.group_orders && (
+                  <View style={styles.groupedServicesSection}>
+                    <Text style={styles.groupedServicesSectionTitle}>
+                      Services inclus ({selectedOrder.group_orders.length}):
+                    </Text>
+                    {selectedOrder.group_orders.map((groupOrder, index) => (
+                      <View key={index} style={styles.groupedServiceCard}>
+                        <Text style={styles.groupedServiceName}>{groupOrder.businessName}</Text>
+                        <Text style={styles.groupedServiceTotal}>
+                          {formatCurrency(groupOrder.total)}
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={styles.groupedTotalCard}>
+                      <Text style={styles.groupedTotalLabel}>Total groupé:</Text>
+                      <Text style={styles.groupedTotalValue}>
+                        {formatCurrency(selectedOrder.group_total || selectedOrder.total)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                
                 <OrderItemsList 
                   items={selectedOrder.items}
                   showImages={true}
@@ -1206,5 +1297,105 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  businessNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  groupedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E31837',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  groupedBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  groupedInfo: {
+    fontSize: 12,
+    color: '#E31837',
+    fontWeight: '500',
+  },
+  groupedServicesPreview: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+  },
+  groupedServicesTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  groupedServiceItem: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 2,
+  },
+  moreServicesText: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  groupedServicesSection: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  groupedServicesSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  groupedServiceCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  groupedServiceName: {
+    fontSize: 13,
+    color: '#333',
+    flex: 1,
+  },
+  groupedServiceTotal: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E31837',
+  },
+  groupedTotalCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    backgroundColor: '#E31837',
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  groupedTotalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  groupedTotalValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 }); 

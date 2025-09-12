@@ -2,14 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Linking,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Linking,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ToastContainer from '../../components/ToastContainer';
@@ -251,18 +251,42 @@ export default function OrderTrackingScreen() {
             style={styles.backButton} 
             onPress={() => router.back()}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#E31837" />
+            <MaterialIcons name="chevron-left" size={24} color="#E31837" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Suivi de commande</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity 
+            style={styles.shareButton}
+            onPress={() => {
+              // TODO: Implémenter le partage de la commande
+              showToast('info', 'Fonctionnalité de partage en cours de développement');
+            }}
+          >
+            <MaterialIcons name="share" size={24} color="#E31837" />
+          </TouchableOpacity>
         </View>
 
-        {/* Numéro de commande */}
+        {/* Numéro de commande avec QR Code */}
         <View style={styles.orderNumberCard}>
-          <Text style={styles.orderNumberLabel}>Numéro de commande</Text>
-          <Text style={styles.orderNumber}>
-            #{order.order_number || `CMD-${order.id.slice(0, 8).toUpperCase()}`}
-          </Text>
+          <View style={styles.orderNumberContent}>
+            <View style={styles.orderNumberInfo}>
+              <Text style={styles.orderNumberLabel}>Numéro de commande</Text>
+              <Text style={styles.orderNumber}>
+                #{order.order_number || `CMD-${order.id.slice(0, 8).toUpperCase()}`}
+              </Text>
+              <Text style={styles.orderDate}>
+                Passée le {formatDate(order.created_at)} à {formatTime(order.created_at)}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.qrCodeButton}
+              onPress={() => {
+                // TODO: Implémenter l'affichage du QR Code
+                showToast('info', 'QR Code en cours de développement');
+              }}
+            >
+              <MaterialIcons name="qr-code" size={32} color="#E31837" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Statut de la commande avec progression */}
@@ -478,80 +502,143 @@ export default function OrderTrackingScreen() {
                   </Text>
                 </View>
                 
-                {['pending', 'confirmed'].includes(order.status) && (
+                {/* Actions rapides */}
+                <View style={styles.quickActions}>
+                  {['pending', 'confirmed'].includes(order.status) && (
+                    <TouchableOpacity 
+                      style={styles.cancelButton}
+                      onPress={handleCancelOrder}
+                    >
+                      <MaterialIcons name="cancel" size={16} color="#F44336" />
+                      <Text style={styles.cancelButtonText}>Annuler</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {(order.status === 'out_for_delivery' || order.status === 'delivered') && order.driver_phone && (
+                    <TouchableOpacity 
+                      style={styles.callButton}
+                      onPress={handleCallDriver}
+                    >
+                      <MaterialIcons name="phone" size={16} color="#4CAF50" />
+                      <Text style={styles.callButtonText}>Appeler</Text>
+                    </TouchableOpacity>
+                  )}
+                  
                   <TouchableOpacity 
-                    style={styles.cancelButton}
-                    onPress={handleCancelOrder}
+                    style={styles.trackButton}
+                    onPress={() => {
+                      // TODO: Implémenter le suivi en temps réel
+                      showToast('info', 'Suivi en temps réel en cours de développement');
+                    }}
                   >
-                    <Text style={styles.cancelButtonText}>Annuler la commande</Text>
+                    <MaterialIcons name="my-location" size={16} color="#2196F3" />
+                    <Text style={styles.trackButtonText}>Suivre</Text>
                   </TouchableOpacity>
-                )}
+                </View>
               </View>
             </>
           )}
         </View>
 
-        {/* Détails de la commande */}
+        {/* Articles de la commande */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Détails de la commande</Text>
+            <Text style={styles.sectionTitle}>Articles commandés</Text>
+            <View style={styles.businessInfo}>
+              <MaterialIcons name="store" size={16} color="#10b981" />
+              <Text style={styles.businessName}>{order.business_name || 'Restaurant'}</Text>
+            </View>
           </View>
           
           <View style={styles.cardContent}>
-            <View style={styles.businessInfo}>
-              <MaterialIcons name="store" size={16} color="#10b981" />
-              <Text style={styles.businessName}>{order.business_name}</Text>
-            </View>
-            
-            <View style={styles.itemsSection}>
-              <Text style={styles.itemsSectionTitle}>Articles</Text>
-              {order.items?.map((item, index) => (
-                <View key={index} style={styles.itemRow}>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>
-                      <Text style={styles.itemQuantity}>{item.quantity}x</Text> {item.name}
-                    </Text>
-                    {item.special_instructions && !item.special_instructions.includes('package_order_id') && (
-                      <Text style={styles.itemNote}>
-                        Note: {item.special_instructions}
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={styles.itemPrice}>
-                    {((item.price || 0) * (item.quantity || 0)).toLocaleString()} GNF
+            {order.items?.map((item, index) => (
+              <View key={index} style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>
+                    <Text style={styles.itemQuantity}>{item.quantity}x</Text> {item.name}
                   </Text>
+                  {item.special_instructions && !item.special_instructions.includes('package_order_id') && (
+                    <Text style={styles.itemNote}>
+                      Note: {item.special_instructions}
+                    </Text>
+                  )}
                 </View>
-              ))}
-            </View>
-            
-            <View style={styles.divider} />
-            
-            {/* Résumé du paiement */}
-            <View style={styles.pricingSection}>
-              <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Sous-total</Text>
-                <Text style={styles.pricingValue}>{(order.total || 0).toLocaleString()} GNF</Text>
+                <Text style={styles.itemPrice}>
+                  {((item.price || 0) * (item.quantity || 0)).toLocaleString()} GNF
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Résumé financier */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.sectionTitle}>Résumé financier</Text>
+          </View>
+          
+          <View style={styles.cardContent}>
+            {/* Détail des coûts */}
+            <View style={styles.costBreakdown}>
+              <View style={styles.costRow}>
+                <View style={styles.costInfo}>
+                  <MaterialIcons name="receipt" size={16} color="#666" />
+                  <Text style={styles.costLabel}>Sous-total</Text>
+                </View>
+                <Text style={styles.costValue}>{(order.total || 0).toLocaleString()} GNF</Text>
               </View>
               
               {(order.delivery_fee || 0) > 0 && (
-                <View style={styles.pricingRow}>
-                  <Text style={styles.pricingLabel}>Frais de livraison</Text>
-                  <Text style={styles.pricingValue}>{(order.delivery_fee || 0).toLocaleString()} GNF</Text>
+                <View style={styles.costRow}>
+                  <View style={styles.costInfo}>
+                    <MaterialIcons name="local-shipping" size={16} color="#666" />
+                    <Text style={styles.costLabel}>Frais de livraison</Text>
+                  </View>
+                  <Text style={styles.costValue}>{(order.delivery_fee || 0).toLocaleString()} GNF</Text>
                 </View>
               )}
               
-              <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Frais de service (2%)</Text>
-                <Text style={styles.pricingValue}>{(order.tax || 0).toLocaleString()} GNF</Text>
-              </View>
-              
-              <View style={[styles.pricingRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total</Text>
+              {(order.service_fee || order.tax || 0) > 0 && (
+                <View style={styles.costRow}>
+                  <View style={styles.costInfo}>
+                    <MaterialIcons name="build" size={16} color="#666" />
+                    <Text style={styles.costLabel}>Frais de service (2%)</Text>
+                  </View>
+                  <Text style={styles.costValue}>{(order.service_fee || order.tax || 0).toLocaleString()} GNF</Text>
+                </View>
+              )}
+            </View>
+            
+            {/* Séparateur */}
+            <View style={styles.financialDivider} />
+            
+            {/* Total et statut */}
+            <View style={styles.totalSection}>
+              <View style={styles.totalRow}>
+                <View style={styles.totalInfo}>
+                  <MaterialIcons name="account-balance-wallet" size={20} color="#E31837" />
+                  <Text style={styles.totalLabel}>Total à payer</Text>
+                </View>
                 <Text style={styles.totalValue}>{(order.grand_total || 0).toLocaleString()} GNF</Text>
               </View>
               
-              <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Statut du paiement</Text>
+              <View style={styles.paymentStatusRow}>
+                <View style={styles.paymentStatusInfo}>
+                  <MaterialIcons 
+                    name={
+                      order.payment_status === 'paid' ? 'check-circle' :
+                      order.payment_status === 'failed' ? 'error' :
+                      'schedule'
+                    } 
+                    size={16} 
+                    color={
+                      order.payment_status === 'paid' ? '#4CAF50' :
+                      order.payment_status === 'failed' ? '#F44336' :
+                      '#FF9800'
+                    } 
+                  />
+                  <Text style={styles.paymentStatusLabel}>Statut du paiement</Text>
+                </View>
                 <View style={[
                   styles.paymentStatusBadge,
                   order.payment_status === 'paid' ? styles.paymentStatusPaid :
@@ -571,93 +658,58 @@ export default function OrderTrackingScreen() {
                 </View>
               </View>
             </View>
-            
-            <View style={styles.divider} />
-            
-            {/* Informations de livraison */}
-            <View style={styles.deliverySection}>
-              <Text style={styles.deliverySectionTitle}>
-                {order.delivery_method === 'delivery' ? 'Informations de livraison' : 'Informations de retrait'}
-              </Text>
-              
-              <View style={styles.deliveryInfo}>
-                <MaterialIcons name="location-on" size={16} color="#E31837" />
-                <View style={styles.deliveryInfoContent}>
-                  {order.delivery_method === 'delivery' ? (
-                    <>
-                      <Text style={styles.deliveryInfoTitle}>Adresse de livraison</Text>
-                      <Text style={styles.deliveryInfoText}>{order.delivery_address}</Text>
-                      {order.landmark && (
-                        <Text style={styles.landmarkText}>Point de repère: {order.landmark}</Text>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.deliveryInfoTitle}>Adresse de retrait</Text>
-                      <Text style={styles.deliveryInfoText}>{order.business_name}</Text>
-                      <Text style={styles.pickupNote}>
-                        Veuillez présenter l'identifiant de votre commande lors du retrait
-                      </Text>
-                    </>
-                  )}
-                </View>
-              </View>
-              
-              {order.delivery_instructions && (
-                <View style={styles.deliveryInfo}>
-                  <MaterialIcons name="schedule" size={16} color="#E31837" />
-                  <View style={styles.deliveryInfoContent}>
-                    <Text style={styles.deliveryInfoTitle}>Instructions de livraison</Text>
-                    <Text style={styles.deliveryInfoText}>{order.delivery_instructions}</Text>
-                  </View>
-                </View>
-              )}
-              
-              <View style={styles.deliveryInfo}>
-                <MaterialIcons name="schedule" size={16} color="#E31837" />
-                <View style={styles.deliveryInfoContent}>
-                  <Text style={styles.deliveryInfoTitle}>Commande passée le</Text>
-                  <Text style={styles.deliveryInfoText}>
-                    {formatDate(order.created_at)} à {formatTime(order.created_at)}
-                  </Text>
-                </View>
-              </View>
-            </View>
           </View>
         </View>
 
-        {/* Résumé de la commande */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Résumé</Text>
+        {/* Informations de livraison */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.sectionTitle}>
+              {order.delivery_method === 'delivery' ? 'Informations de livraison' : 'Informations de retrait'}
+            </Text>
+          </View>
           
-          <View style={styles.summaryItems}>
-            <View style={styles.summaryItem}>
-              <MaterialIcons name="receipt" size={20} color="#E31837" />
-              <View style={styles.summaryItemContent}>
-                <Text style={styles.summaryItemTitle}>Total de la commande</Text>
-                <Text style={styles.summaryItemValue}>{(order.grand_total || 0).toLocaleString()} GNF</Text>
+          <View style={styles.cardContent}>
+            <View style={styles.deliveryInfo}>
+              <MaterialIcons name="location-on" size={16} color="#E31837" />
+              <View style={styles.deliveryInfoContent}>
+                {order.delivery_method === 'delivery' ? (
+                  <>
+                    <Text style={styles.deliveryInfoTitle}>Adresse de livraison</Text>
+                    <Text style={styles.deliveryInfoText}>{order.delivery_address || 'Adresse non spécifiée'}</Text>
+                    {order.landmark && (
+                      <Text style={styles.landmarkText}>Point de repère: {order.landmark}</Text>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.deliveryInfoTitle}>Adresse de retrait</Text>
+                    <Text style={styles.deliveryInfoText}>{order.business_name || 'Restaurant'}</Text>
+                    <Text style={styles.pickupNote}>
+                      Veuillez présenter l'identifiant de votre commande lors du retrait
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
             
-            <View style={styles.summaryItem}>
-              <MaterialIcons 
-                name={order.delivery_method === 'delivery' ? 'local-shipping' : 'store'} 
-                size={20} 
-                color="#E31837" 
-              />
-              <View style={styles.summaryItemContent}>
-                <Text style={styles.summaryItemTitle}>Mode de livraison</Text>
-                <Text style={styles.summaryItemSubtitle}>
-                  {order.delivery_method === 'delivery' ? 'Livraison à domicile' : 'À emporter'}
+            {order.delivery_instructions && (
+              <View style={styles.deliveryInfo}>
+                <MaterialIcons name="message" size={16} color="#E31837" />
+                <View style={styles.deliveryInfoContent}>
+                  <Text style={styles.deliveryInfoTitle}>Instructions spéciales</Text>
+                  <Text style={styles.deliveryInfoText}>{order.delivery_instructions}</Text>
+                </View>
+              </View>
+            )}
+            
+            <View style={styles.deliveryInfo}>
+              <MaterialIcons name="schedule" size={16} color="#E31837" />
+              <View style={styles.deliveryInfoContent}>
+                <Text style={styles.deliveryInfoTitle}>Commande passée le</Text>
+                <Text style={styles.deliveryInfoText}>
+                  {formatDate(order.created_at)} à {formatTime(order.created_at)}
                 </Text>
-              </View>
-            </View>
-            
-            <View style={styles.summaryItem}>
-              <MaterialIcons name="list" size={20} color="#E31837" />
-              <View style={styles.summaryItemContent}>
-                <Text style={styles.summaryItemTitle}>Articles</Text>
-                <Text style={styles.summaryItemSubtitle}>{order.items?.length || 0} article(s)</Text>
               </View>
             </View>
           </View>
@@ -688,10 +740,13 @@ export default function OrderTrackingScreen() {
           
           <TouchableOpacity 
             style={[styles.actionButton, styles.primaryButton]}
-            onPress={() => router.push('/')}
+            onPress={() => {
+              // TODO: Implémenter la réédition de commande
+              showToast('info', 'Commande similaire en cours de développement');
+            }}
           >
-            <MaterialIcons name="home" size={20} color="#fff" />
-            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>Accueil</Text>
+            <MaterialIcons name="repeat" size={20} color="#fff" />
+            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>Commander à nouveau</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -765,30 +820,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  placeholder: {
-    width: 40,
+  shareButton: {
+    padding: 8,
   },
   orderNumberCard: {
     backgroundColor: '#fff',
     margin: 16,
     padding: 20,
     borderRadius: 12,
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
+  orderNumberContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  orderNumberInfo: {
+    flex: 1,
+  },
   orderNumberLabel: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   orderNumber: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#E31837',
+    marginBottom: 4,
+  },
+  orderDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  qrCodeButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
   },
   statusCard: {
     backgroundColor: '#fff',
@@ -992,6 +1064,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 12,
+  },
+  cardHeader: {
     marginBottom: 16,
   },
   infoRow: {
@@ -1014,6 +1089,17 @@ const styles = StyleSheet.create({
     flex: 2,
     textAlign: 'right',
   },
+  businessInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  businessName: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1034,6 +1120,12 @@ const styles = StyleSheet.create({
   itemQuantity: {
     fontSize: 14,
     color: '#666',
+  },
+  itemNote: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   itemPrice: {
     fontSize: 16,
@@ -1088,31 +1180,202 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  deliverySection: {
+    marginTop: 16,
+  },
+  deliverySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  deliveryInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  deliveryInfoContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  deliveryInfoTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  deliveryInfoText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  landmarkText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  pickupNote: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  costBreakdown: {
+    marginBottom: 16,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  costInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  costLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  costValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  financialDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 16,
+  },
+  totalSection: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  totalInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 8,
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#E31837',
+  },
+  paymentStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paymentStatusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  paymentStatusLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#F44336',
+    backgroundColor: '#fff',
+  },
+  cancelButtonText: {
+    fontSize: 12,
+    color: '#F44336',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  callButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    backgroundColor: '#fff',
+  },
+  callButtonText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+    backgroundColor: '#fff',
+  },
+  trackButtonText: {
+    fontSize: 12,
+    color: '#2196F3',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
   actionsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingBottom: 20,
-    gap: 12,
+    gap: 8,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E31837',
     backgroundColor: '#fff',
+    minHeight: 48,
   },
   primaryButton: {
     backgroundColor: '#E31837',
+    flex: 1.2,
   },
   actionButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#E31837',
-    marginLeft: 8,
+    marginLeft: 6,
+    textAlign: 'center',
   },
   primaryButtonText: {
     color: '#fff',

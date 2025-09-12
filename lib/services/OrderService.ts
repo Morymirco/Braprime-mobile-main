@@ -69,6 +69,14 @@ export interface Order {
   group_sequence?: number;
   available_for_drivers?: boolean;
   
+  // Champs pour les commandes groupées
+  business_name?: string; // Nom du commerce (pour l'affichage)
+  items?: OrderItem[]; // Items de la commande (pour l'affichage)
+  is_grouped?: boolean; // Indique si c'est une commande groupée
+  group_orders?: Order[]; // Autres commandes du même groupe
+  group_total?: number; // Total du groupe
+  group_delivery_fee?: number; // Frais de livraison du groupe
+  
   created_at: string;
   updated_at: string;
 }
@@ -155,7 +163,7 @@ class OrderService {
     try {
       console.log('🔍 DEBUG - getUserOrders appelé pour userId:', userId);
       
-      // Récupérer les commandes avec leurs items
+      // Récupérer les commandes avec leurs items et informations de commerce
       const { data: orders, error } = await supabase
         .from('orders')
         .select(`
@@ -175,6 +183,10 @@ class OrderService {
               image,
               is_popular
             )
+          ),
+          businesses (
+            id,
+            name
           )
         `)
         .eq('user_id', userId)
@@ -205,9 +217,103 @@ class OrderService {
       console.log('🔍 DEBUG - Nombre de commandes brutes:', orders?.length || 0);
       console.log('🔍 DEBUG - Nombre de commandes après filtrage des colis:', filteredOrders.length);
 
-      // Transformer les données pour inclure les items dans un format compatible
-      const ordersWithItems = filteredOrders.map(order => ({
+      // Traiter les commandes pour gérer les groupes
+      const processedOrders = await this.processGroupedOrders(filteredOrders);
+
+      console.log('🔍 DEBUG - Commandes transformées:', processedOrders);
+      console.log('🔍 DEBUG - Nombre de commandes transformées:', processedOrders.length);
+      console.log('🔍 DEBUG - Premier ordre transformé:', processedOrders[0]);
+
+      console.log('✅ Commandes récupérées avec items:', processedOrders.length);
+      return { orders: processedOrders, error: null };
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des commandes:', error);
+      return { orders: [], error };
+    }
+  }
+
+  // Traiter les commandes pour gérer les groupes de livraison
+  private async processGroupedOrders(orders: any[]): Promise<Order[]> {
+    // Grouper les commandes par delivery_group_id
+    const groupedOrders = new Map<string, any[]>();
+    const standaloneOrders: any[] = [];
+
+    orders.forEach(order => {
+      if (order.delivery_group_id) {
+        if (!groupedOrders.has(order.delivery_group_id)) {
+          groupedOrders.set(order.delivery_group_id, []);
+        }
+        groupedOrders.get(order.delivery_group_id)!.push(order);
+      } else {
+        standaloneOrders.push(order);
+      }
+    });
+
+    const processedOrders: Order[] = [];
+
+    // Traiter les commandes groupées
+    for (const [groupId, groupOrders] of groupedOrders) {
+      if (groupOrders.length > 1) {
+        // Créer une commande groupée principale
+        const mainOrder = groupOrders[0];
+        const groupTotal = groupOrders.reduce((sum, order) => sum + (order.grand_total || 0), 0);
+        const groupDeliveryFee = groupOrders.reduce((sum, order) => sum + (order.delivery_fee || 0), 0);
+
+        const groupedOrder: Order = {
+          ...mainOrder,
+          business_name: `${groupOrders.length} services`,
+          is_grouped: true,
+          group_orders: groupOrders.map(order => ({
+            ...order,
+            business_name: order.businesses?.name || `Business ${order.business_id}`,
+            items: (order.order_items || []).map(item => ({
+              id: item.id,
+              name: item.name || item.menu_item?.name || 'Article inconnu',
+              price: item.price || item.menu_item?.price || 0,
+              quantity: item.quantity,
+              specialInstructions: item.special_instructions,
+              image: item.menu_item?.image
+            }))
+          })),
+          group_total: groupTotal,
+          group_delivery_fee: groupDeliveryFee,
+          grand_total: groupTotal,
+          items: groupOrders.flatMap(order => 
+            (order.order_items || []).map(item => ({
+              id: item.id,
+              name: item.name || item.menu_item?.name || 'Article inconnu',
+              price: item.price || item.menu_item?.price || 0,
+              quantity: item.quantity,
+              specialInstructions: item.special_instructions,
+              image: item.menu_item?.image
+            }))
+          )
+        };
+
+        processedOrders.push(groupedOrder);
+      } else {
+        // Commande seule dans un groupe (cas rare)
+        const order = groupOrders[0];
+        processedOrders.push({
+          ...order,
+          business_name: order.businesses?.name || `Business ${order.business_id}`,
+          items: (order.order_items || []).map(item => ({
+            id: item.id,
+            name: item.name || item.menu_item?.name || 'Article inconnu',
+            price: item.price || item.menu_item?.price || 0,
+            quantity: item.quantity,
+            specialInstructions: item.special_instructions,
+            image: item.menu_item?.image
+          }))
+        });
+      }
+    }
+
+    // Ajouter les commandes standalone
+    standaloneOrders.forEach(order => {
+      processedOrders.push({
         ...order,
+        business_name: order.businesses?.name || `Business ${order.business_id}`,
         items: (order.order_items || []).map(item => ({
           id: item.id,
           name: item.name || item.menu_item?.name || 'Article inconnu',
@@ -216,18 +322,11 @@ class OrderService {
           specialInstructions: item.special_instructions,
           image: item.menu_item?.image
         }))
-      }));
+      });
+    });
 
-      console.log('🔍 DEBUG - Commandes transformées:', ordersWithItems);
-      console.log('🔍 DEBUG - Nombre de commandes transformées:', ordersWithItems.length);
-      console.log('🔍 DEBUG - Premier ordre transformé:', ordersWithItems[0]);
-
-      console.log('✅ Commandes récupérées avec items:', ordersWithItems.length);
-      return { orders: ordersWithItems, error: null };
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des commandes:', error);
-      return { orders: [], error };
-    }
+    // Trier par date de création
+    return processedOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   // Récupérer une commande spécifique avec ses items (excluant les packages/colis)
@@ -618,14 +717,17 @@ class OrderService {
     }
   }
 
-  // Noter une commande
+  // Noter une commande ET le livreur
   async rateOrder(orderId: string, rating: number, review?: string): Promise<{ success: boolean; error: any }> {
     try {
       if (rating < 1 || rating > 5) {
         return { success: false, error: 'La note doit être entre 1 et 5' };
       }
 
-      const { error } = await supabase
+      console.log('⭐ Notation de la commande:', { orderId, rating, review });
+
+      // 1. Noter la commande (existant)
+      const { error: orderError } = await supabase
         .from('orders')
         .update({ 
           customer_rating: rating,
@@ -634,9 +736,55 @@ class OrderService {
         })
         .eq('id', orderId);
 
-      if (error) {
-        console.error('❌ Erreur lors de la notation de la commande:', error);
-        return { success: false, error };
+      if (orderError) {
+        console.error('❌ Erreur lors de la notation de la commande:', orderError);
+        return { success: false, error: orderError };
+      }
+
+      console.log('✅ Commande notée avec succès');
+
+      // 2. NOUVEAU : Noter le livreur si la commande a un driver
+      try {
+        const { data: order, error: orderFetchError } = await supabase
+          .from('orders')
+          .select('driver_id, user_id, status')
+          .eq('id', orderId)
+          .single();
+
+        if (orderFetchError) {
+          console.error('❌ Erreur lors de la récupération des infos de commande:', orderFetchError);
+          // Ne pas faire échouer la notation de la commande
+          return { success: true, error: null };
+        }
+
+        // Vérifier que la commande a un driver et est livrée
+        if (order?.driver_id && order?.user_id && order?.status === 'delivered') {
+          console.log('🚗 Commande avec driver détectée, notation du livreur...');
+          
+          // Créer un avis pour le livreur
+          const { data: reviewResult, error: reviewError } = await supabase.rpc('create_driver_review', {
+            p_driver_id: order.driver_id,
+            p_order_id: orderId,
+            p_customer_id: order.user_id,
+            p_rating: rating,
+            p_comment: review || null
+          });
+
+          if (reviewError) {
+            console.error('❌ Erreur lors de l\'appel de create_driver_review:', reviewError);
+            // Ne pas faire échouer la notation de la commande
+          } else if (reviewResult && !reviewResult.success) {
+            console.warn('⚠️ Erreur lors de la notation du livreur:', reviewResult.error);
+            // Ne pas faire échouer la notation de la commande
+          } else {
+            console.log('✅ Livreur noté avec succès:', reviewResult);
+          }
+        } else {
+          console.log('ℹ️ Commande sans driver ou non livrée, pas de notation de livreur');
+        }
+      } catch (driverReviewError) {
+        console.error('❌ Erreur lors de la notation du livreur:', driverReviewError);
+        // Ne pas faire échouer la notation de la commande
       }
 
       return { success: true, error: null };

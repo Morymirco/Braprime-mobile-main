@@ -20,6 +20,7 @@ import ToastContainer from '../components/ToastContainer';
 import { useCart } from '../hooks/use-cart';
 import { useAuth } from '../lib/contexts/AuthContext';
 import { useToast } from '../lib/contexts/ToastContext';
+import { deliveryGroupService } from '../lib/services/DeliveryGroupService';
 import { orderService } from '../lib/services/OrderService';
 import { PaymentRequest, PaymentService } from '../lib/services/PaymentService';
 
@@ -27,6 +28,21 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { cart, loading, loadingStates, clearCart } = useCart();
+  
+  // Debug: Afficher la structure du panier
+  useEffect(() => {
+    if (cart) {
+      console.log('🔍 DEBUG - Structure du panier dans checkout:', {
+        id: cart.id,
+        is_multi_service: cart.is_multi_service,
+        business_count: cart.business_count,
+        businesses: cart.businesses,
+        businessesLength: cart.businesses?.length,
+        items: cart.items?.length,
+        total: cart.total
+      });
+    }
+  }, [cart]);
   const { showToast } = useToast();
   
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
@@ -120,7 +136,7 @@ export default function CheckoutScreen() {
     if (deliveryMethod === 'delivery') {
       // Validation de l'adresse
       if (!formData.address.trim()) {
-        return false;
+      return false;
       }
       
       // Validation que l'adresse contient une virgule (adresse complète sélectionnée)
@@ -163,78 +179,279 @@ export default function CheckoutScreen() {
     }
 
     try {
-      // Préparer les données de commande complètes (adapté au schéma mobile)
-      const orderData = {
-        user_id: user.id,
-        business_id: cart?.is_multi_service ? undefined : cart?.business_id,
-        // items n'existe pas dans le schéma mobile (table séparée order_items)
-        status: 'pending' as const,
-        total: cartTotal,
-        delivery_fee: deliveryFee,
-        service_fee: serviceFee, // Renommé de 'tax' vers 'service_fee'
-        grand_total: grandTotal,
-        delivery_method: deliveryMethod,
-        delivery_address: deliveryMethod === 'delivery' ? formData.address : undefined,
-        delivery_instructions: formData.notes || undefined,
-        payment_method: paymentMethod,
-        payment_status: 'pending' as const,
-        
-        // Coordonnées GPS
-        delivery_latitude: deliveryMethod === 'delivery' && formData.address ? 9.5370 : undefined,
-        delivery_longitude: deliveryMethod === 'delivery' && formData.address ? -13.6785 : undefined,
-        delivery_formatted_address: deliveryMethod === 'delivery' ? formData.address : undefined,
-        pickup_latitude: undefined,
-        pickup_longitude: undefined,
-        pickup_formatted_address: undefined,
-        
-        // Coordonnées JSONB
-        delivery_coordinates: deliveryMethod === 'delivery' && formData.address ? {
-          latitude: 9.5370,
-          longitude: -13.6785
-        } : undefined,
-        
-        // Zone géographique
-        zone: deliveryMethod === 'delivery' ? 'Conakry' : undefined,
-        commune: deliveryMethod === 'delivery' ? formData.commune || 'Conakry' : undefined,
-        quartier: deliveryMethod === 'delivery' ? formData.quartier || 'Centre-ville' : undefined,
-        
-        // Type de livraison
-        delivery_type: deliveryTimeMode,
-        scheduled_delivery_window_start: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
-          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
-        scheduled_delivery_window_end: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
-          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
-        preferred_delivery_time: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
-          new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
-        
-        // Informations de livraison
-        estimated_delivery: deliveryMethod === 'delivery' ? 
-          new Date(Date.now() + (30 + Math.random() * 15) * 60000).toISOString() : undefined,
-        
-        // Point de repère
-        landmark: formData.landmark || undefined,
-        
-        // Champs qui n'existent pas dans le schéma mobile (supprimés)
-        // customer_rating, customer_review
-      };
-
-      console.log('🔍 DEBUG - Données de commande préparées:', orderData);
-
-      // Créer la commande
-      const { success, orderId, error: orderError } = await createOrderWithoutClearingCart(orderData, cart || undefined);
+      // Vérifier si c'est une commande multi-services (groupée)
+      console.log('🔍 DEBUG - Vérification commande groupée:', {
+        is_multi_service: cart?.is_multi_service,
+        businesses: cart?.businesses,
+        businessesLength: cart?.businesses?.length,
+        businessCount: cart?.business_count
+      });
       
-      if (success && orderId) {
-        console.log('✅ Commande créée avec succès:', orderId);
-        setCurrentOrderId(orderId);
-        
-        // Créer le paiement via Lengo Pay (le panier sera vidé après l'ouverture de la WebView)
-        await handleCreatePayment(orderId);
+      if (cart?.is_multi_service && cart?.businesses && cart.businesses.length > 1) {
+        console.log('✅ Commande groupée détectée - création livraison groupée');
+        // Créer une livraison groupée
+        await handleCreateGroupedOrder();
       } else {
-        showToast('error', orderError || 'Impossible de créer la commande. Veuillez réessayer.');
+        console.log('✅ Commande simple détectée - création commande simple');
+        // Créer une commande simple
+        await handleCreateSingleOrder();
       }
     } catch (error) {
       console.error('Erreur lors de la création de la commande:', error);
       showToast('error', 'Une erreur est survenue lors de la création de la commande.');
+    }
+  };
+
+  // Créer une commande simple
+  const handleCreateSingleOrder = async () => {
+             // Préparer les données de commande complètes (adapté au schéma mobile)
+       const orderData = {
+      user_id: user!.id,
+      business_id: cart?.business_id,
+         status: 'pending' as const,
+         total: cartTotal,
+         delivery_fee: deliveryFee,
+      service_fee: serviceFee,
+         grand_total: grandTotal,
+         delivery_method: deliveryMethod,
+         delivery_address: deliveryMethod === 'delivery' ? formData.address : undefined,
+         delivery_instructions: formData.notes || undefined,
+         payment_method: paymentMethod,
+         payment_status: 'pending' as const,
+         
+         // Coordonnées GPS
+         delivery_latitude: deliveryMethod === 'delivery' && formData.address ? 9.5370 : undefined,
+         delivery_longitude: deliveryMethod === 'delivery' && formData.address ? -13.6785 : undefined,
+         delivery_formatted_address: deliveryMethod === 'delivery' ? formData.address : undefined,
+         pickup_latitude: undefined,
+         pickup_longitude: undefined,
+         pickup_formatted_address: undefined,
+         
+         // Coordonnées JSONB
+         delivery_coordinates: deliveryMethod === 'delivery' && formData.address ? {
+           latitude: 9.5370,
+           longitude: -13.6785
+         } : undefined,
+         
+                   // Zone géographique
+          zone: deliveryMethod === 'delivery' ? 'Conakry' : undefined,
+          commune: deliveryMethod === 'delivery' ? formData.commune || 'Conakry' : undefined,
+          quartier: deliveryMethod === 'delivery' ? formData.quartier || 'Centre-ville' : undefined,
+         
+         // Type de livraison
+         delivery_type: deliveryTimeMode,
+         scheduled_delivery_window_start: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+           new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+         scheduled_delivery_window_end: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+           new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+         preferred_delivery_time: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+           new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+         
+                   // Informations de livraison
+          estimated_delivery: deliveryMethod === 'delivery' ? 
+            new Date(Date.now() + (30 + Math.random() * 15) * 60000).toISOString() : undefined,
+         
+         // Point de repère
+         landmark: formData.landmark || undefined,
+       };
+
+    console.log('🔍 DEBUG - Données de commande simple préparées:', orderData);
+
+    // Créer la commande
+    const { success, orderId, error: orderError } = await createOrderWithoutClearingCart(orderData, cart || undefined);
+      
+      if (success && orderId) {
+      console.log('✅ Commande simple créée avec succès:', orderId);
+      setCurrentOrderId(orderId);
+      
+      // Créer le paiement via Lengo Pay
+      await handleCreatePayment(orderId);
+      } else {
+        showToast('error', orderError || 'Impossible de créer la commande. Veuillez réessayer.');
+      }
+  };
+
+  // Créer une livraison groupée
+  const handleCreateGroupedOrder = async () => {
+    if (!cart?.businesses || cart.businesses.length <= 1) {
+      showToast('error', 'Erreur: Panier multi-services invalide.');
+      return;
+    }
+
+    console.log('🚚 Création d\'une livraison groupée pour', cart.businesses.length, 'services');
+
+    // 1. Créer le groupe de livraison
+    const groupData = {
+      user_id: user!.id,
+      delivery_address: formData.address,
+      delivery_instructions: formData.notes,
+      delivery_method: deliveryMethod,
+      delivery_type: deliveryTimeMode,
+      payment_method: paymentMethod,
+      total_amount: grandTotal,
+      total_delivery_fee: deliveryFee,
+      landmark: formData.landmark,
+      zone: 'Conakry',
+      commune: formData.commune || 'Conakry',
+      quartier: formData.quartier || 'Centre-ville',
+      scheduled_delivery_window_start: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+        new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+      scheduled_delivery_window_end: deliveryTimeMode === 'scheduled' && scheduledDate && scheduledTime ? 
+        new Date(`${scheduledDate.toISOString().split('T')[0]}T${scheduledTime}:00`).toISOString() : undefined,
+    };
+
+    const { group_id, error: groupError } = await deliveryGroupService.createDeliveryGroup(groupData);
+    
+    if (groupError || !group_id) {
+      showToast('error', 'Erreur lors de la création du groupe de livraison.');
+      return;
+    }
+
+    console.log('✅ Groupe de livraison créé:', group_id);
+
+    // 2. Créer toutes les commandes du groupe
+    const createdOrders = [];
+    let sequence = 1;
+
+    for (const business of cart.businesses) {
+      // Filtrer les articles qui appartiennent à ce business
+      const businessItems = cart.items?.filter(item => item.business_id === business.id) || [];
+      
+      if (businessItems.length === 0) continue;
+
+      console.log(`📦 Création commande pour ${business.name}: ${businessItems.length} article(s)`);
+
+      // Calculer les totaux pour cette commande
+      const businessTotal = businessItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const businessServiceFee = Math.round(businessTotal * 0.02);
+      const businessGrandTotal = businessTotal + businessServiceFee;
+
+      const orderData = {
+        user_id: user!.id,
+        business_id: business.id,
+        delivery_group_id: group_id,
+        group_sequence: sequence++,
+        items: businessItems.map(item => ({
+          id: item.id,
+          menu_item_id: item.menu_item_id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          special_instructions: item.special_instructions
+        })),
+        total: businessTotal,
+        delivery_fee: 0, // Pas de frais individuels pour les commandes groupées
+        service_fee: businessServiceFee,
+        grand_total: businessGrandTotal,
+        delivery_method: deliveryMethod,
+        delivery_address: deliveryMethod === 'delivery' ? formData.address : undefined,
+        delivery_instructions: formData.notes,
+        payment_method: paymentMethod,
+        landmark: formData.landmark,
+        delivery_type: deliveryTimeMode,
+        scheduled_delivery_window_start: groupData.scheduled_delivery_window_start,
+        scheduled_delivery_window_end: groupData.scheduled_delivery_window_end,
+        zone: 'Conakry',
+        commune: formData.commune || 'Conakry',
+        quartier: formData.quartier || 'Centre-ville'
+      };
+
+      const { order, error: orderError } = await deliveryGroupService.createGroupedOrder(orderData);
+      
+      if (orderError || !order) {
+        showToast('error', `Erreur lors de la création de la commande pour ${business.name}.`);
+        return;
+      }
+
+      createdOrders.push(order);
+      console.log(`✅ Commande créée pour ${business.name}`);
+    }
+
+    if (createdOrders.length === 0) {
+      showToast('error', 'Aucune commande n\'a pu être créée.');
+      return;
+    }
+
+    // 3. Utiliser l'ID de la première commande pour le paiement
+    const firstOrderId = createdOrders[0].id;
+    setCurrentOrderId(firstOrderId);
+
+    console.log(`✅ Livraison groupée créée: ${createdOrders.length} commandes, groupe ${group_id.slice(0, 8)}`);
+
+    // 4. Créer le paiement pour le groupe
+    await handleCreateGroupedPayment(group_id, firstOrderId);
+  };
+
+  // Créer le paiement pour une livraison groupée
+  const handleCreateGroupedPayment = async (groupId: string, firstOrderId: string) => {
+    try {
+      if (!user?.id || !cart) {
+        showToast('error', 'Données utilisateur ou panier manquantes');
+        return;
+      }
+
+      // Validation supplémentaire des paramètres de paiement
+      if (!formData.phone || formData.phone.trim() === '') {
+        showToast('error', 'Le numéro de téléphone est requis pour le paiement');
+        return;
+      }
+
+      // Préparer les données de paiement pour le groupe
+      const paymentData: PaymentRequest = {
+        order_id: firstOrderId, // Utiliser l'ID de la première commande
+        user_id: user.id,
+        amount: grandTotal,
+        currency: 'GNF',
+        payment_method: getPaymentMethodCode(selectedPaymentMethod),
+        phone_number: formData.phone.trim(),
+        order_number: `GROUP-${groupId.slice(0, 8)}`,
+        business_name: `${cart.businesses?.length || 0} services`,
+        customer_name: `${formData.firstName} ${formData.lastName}`.trim(),
+        customer_email: formData.email || user.email || '',
+      };
+
+      console.log('🔍 DEBUG - Création du paiement groupé avec les données:', paymentData);
+
+      // Validation finale des paramètres requis
+      const requiredParams = ['order_id', 'user_id', 'amount', 'payment_method', 'phone_number', 'order_number', 'business_name', 'customer_name', 'customer_email'];
+      const missingParams = requiredParams.filter(param => !paymentData[param as keyof PaymentRequest]);
+      
+      if (missingParams.length > 0) {
+        console.error('❌ Paramètres manquants:', missingParams);
+        showToast('error', `Paramètres manquants: ${missingParams.join(', ')}`);
+        return;
+      }
+
+      const paymentResponse = await PaymentService.createPayment(paymentData);
+      
+      console.log('🔍 DEBUG - Réponse du paiement groupé:', paymentResponse);
+      
+      if (paymentResponse.success && paymentResponse.payment_url) {
+        setPaymentUrl(paymentResponse.payment_url);
+        setShowPaymentWebView(true);
+        showToast('success', 'Redirection vers le paiement...');
+        
+        // Mettre à jour le transaction_id pour le groupe
+        if (paymentResponse.pay_id) {
+          await deliveryGroupService.updateGroupTransactionId(groupId, paymentResponse.pay_id);
+        }
+        
+        // Vider le panier après l'ouverture de la WebView
+        setTimeout(async () => {
+          try {
+            await clearCart();
+            console.log('🛒 Panier vidé après ouverture de la WebView de paiement groupé');
+    } catch (error) {
+            console.error('❌ Erreur lors du vidage du panier:', error);
+          }
+        }, 1000);
+      } else {
+        throw new Error(paymentResponse.error || 'Erreur lors de la création du paiement');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du paiement groupé:', error);
+      showToast('error', error instanceof Error ? error.message : 'Erreur lors de la création du paiement');
     }
   };
 
@@ -697,7 +914,7 @@ export default function CheckoutScreen() {
 
               {/* Autocomplétion d'adresse avec carte */}
               <AddressAutocomplete
-                value={formData.address}
+                  value={formData.address}
                 onChange={(address) => setFormData(prev => ({ ...prev, address }))}
                 onPlaceSelect={(place) => {
                   if (place && place.formatted_address) {
@@ -789,7 +1006,7 @@ export default function CheckoutScreen() {
                 </Text>
               </View>
               {selectedPaymentMethod === 'orange_money' && (
-                <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
+              <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
               )}
             </TouchableOpacity>
 
@@ -807,7 +1024,7 @@ export default function CheckoutScreen() {
                 <Text style={styles.paymentMethodDescription}>
                   Paiement via votre compte MTN Money
                 </Text>
-              </View>
+            </View>
               {selectedPaymentMethod === 'mtn_money' && (
                 <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
               )}
@@ -1090,15 +1307,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: '#f0f0f0',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -1,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 3,
     maxHeight: '60%',
     minHeight: 300,
   },
@@ -1214,11 +1431,11 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#f5f5f5',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 1.5,
     elevation: 2,
   },
   itemImageContainer: {

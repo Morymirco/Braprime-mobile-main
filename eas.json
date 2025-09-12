@@ -11,6 +11,9 @@
       "distribution": "internal"
     },
     "production": {
+      "ios": {
+        "autoIncrement": "buildNumber"
+      },
       "android": {
         "buildType": "apk"
       }

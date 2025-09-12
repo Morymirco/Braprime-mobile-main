@@ -7,6 +7,7 @@ import {
     FlatList,
     Image,
     Modal,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -76,12 +77,13 @@ const formatTime = (timeString: string) => {
 
 export default function ReservationsScreen() {
   const router = useRouter();
-  const { reservations, isLoading, error, cancelReservation } = useReservations();
+  const { reservations, isLoading, error, cancelReservation, loadReservations } = useReservations();
 
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [showReservationDetails, setShowReservationDetails] = useState(false);
   const [filter, setFilter] = useState<ReservationStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Filter reservations based on selected filter and search term
   const filteredReservations = reservations.filter((reservation) => {
@@ -92,6 +94,18 @@ export default function ReservationsScreen() {
     
     return matchesFilter && matchesSearch;
   });
+
+  // Fonction de gestion du refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadReservations();
+    } catch (error) {
+      console.error('Erreur lors du refresh des réservations:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Handle view reservation details
   const handleViewReservationDetails = useCallback((reservation: Reservation) => {
@@ -244,7 +258,17 @@ export default function ReservationsScreen() {
         <Text style={styles.title}>Mes Réservations</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#E31837']}
+            tintColor="#E31837"
+          />
+        }
+      >
         {/* Search and Filter */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
@@ -294,8 +318,9 @@ export default function ReservationsScreen() {
           contentContainerStyle={styles.reservationsListContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmptyState}
+          scrollEnabled={false}
         />
-      </View>
+      </ScrollView>
 
       {/* Floating Action Button */}
       <TouchableOpacity 

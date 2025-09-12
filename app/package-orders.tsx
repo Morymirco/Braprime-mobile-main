@@ -6,6 +6,7 @@ import {
     Dimensions,
     FlatList,
     Modal,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -161,6 +162,7 @@ export default function PackageOrdersScreen() {
   const [filter, setFilter] = useState<PackageOrderStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'past3months' | 'older'>('all');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Charger les commandes de colis
   const loadPackageOrders = useCallback(async () => {
@@ -243,6 +245,18 @@ export default function PackageOrdersScreen() {
     
     return matchesFilter && matchesSearch;
   }), [packageOrders, filter, searchTerm]);
+
+  // Fonction de gestion du refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadPackageOrders();
+    } catch (error) {
+      console.error('Erreur lors du refresh des colis:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Grouper les commandes par période de temps
   const { recentOrders, past3MonthsOrders, olderOrders } = useMemo(() => {
@@ -417,7 +431,17 @@ export default function PackageOrdersScreen() {
         <Text style={styles.title}>Mes Colis</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#E31837']}
+            tintColor="#E31837"
+          />
+        }
+      >
         {/* Search and Filter */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
@@ -535,9 +559,10 @@ export default function PackageOrdersScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.ordersListContent}
             showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
           />
         )}
-      </View>
+      </ScrollView>
 
       {/* Order Details Modal */}
       <Modal

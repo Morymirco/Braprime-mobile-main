@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/contexts/AuthContext';
 
@@ -13,20 +13,27 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleBack = () => {
-    router.back();
+    // Rediriger vers la page d'accueil ou splash au lieu de router.back()
+    // car il n'y a pas forcément d'écran précédent
+    router.replace('/initial-splash');
   };
 
   const handleLogin = async () => {
     clearError();
+    setLocalError(null);
+    
     if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez saisir votre email et mot de passe.');
+      setLocalError('Veuillez saisir votre email et mot de passe.');
       return;
     }
+    
     const result = await signInWithEmailPassword(email, password);
     if (result.error) {
-      Alert.alert('Erreur', result.error.message || 'Erreur de connexion.');
+      // L'erreur sera automatiquement affichée via le contexte Auth
+      // Pas besoin d'Alert.alert() car l'erreur est déjà dans le contexte
     } else {
       router.replace('/(tabs)');
     }
@@ -45,7 +52,7 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-        <Ionicons name="arrow-back" size={24} color="black" />
+        <Ionicons name="chevron-back" size={24} color="black" />
       </TouchableOpacity>
 
       <View style={styles.content}>
@@ -59,7 +66,10 @@ export default function LoginScreen() {
             placeholder="Adresse email"
             placeholderTextColor="#999"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (localError) setLocalError(null);
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -75,7 +85,10 @@ export default function LoginScreen() {
             placeholder="Mot de passe"
             placeholderTextColor="#999"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (localError) setLocalError(null);
+            }}
             secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoCorrect={false}
@@ -87,8 +100,8 @@ export default function LoginScreen() {
         </View>
 
         {/* Error Message */}
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
+        {(error || localError) && (
+          <Text style={styles.errorText}>{error || localError}</Text>
         )}
 
         {/* Bouton de connexion */}
