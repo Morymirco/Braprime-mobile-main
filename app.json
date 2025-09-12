@@ -2,7 +2,7 @@
   "expo": {
     "name": "BraPrime",
     "slug": "prime",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "cli": {
       "appVersionSource": "local"
     },
@@ -22,7 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison."
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
