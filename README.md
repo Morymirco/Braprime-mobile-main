@@ -15,7 +15,7 @@ Application mobile de livraison et services pour la Guinée, construite avec Rea
 1. **Cloner le projet**
    ```bash
    git clone <repository-url>
-   cd braprime_mobile-main
+   cd Braprime-mobile-main
    ```
 
 2. **Installer les dépendances**
