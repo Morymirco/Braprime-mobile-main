@@ -286,9 +286,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
+      console.log('🚪 Déconnexion en cours...');
+      
       const { error } = await AuthService.logout();
       
       if (error) {
+        console.error('❌ Erreur lors de la déconnexion:', error);
         setError(error);
         return { error: { message: error } };
       }
@@ -297,6 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         try {
           await PushTokenService.cleanupOnLogout(user.id);
+          console.log('✅ Tokens push nettoyés');
         } catch (pushError) {
           console.warn('⚠️ Erreur lors du nettoyage des tokens push:', pushError);
         }
@@ -304,12 +308,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Effacer la session locale
       await SessionService.clearSession();
+      console.log('✅ Session locale effacée');
+      
+      // Mettre à jour l'état de manière atomique
       setUser(null);
       setIsAuthenticated(false);
       setSessionValid(false);
+      
+      console.log('✅ Déconnexion terminée');
       return { success: true };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      console.error('❌ Erreur lors de la déconnexion:', errorMessage);
       setError(errorMessage);
       return { error: { message: errorMessage } };
     } finally {

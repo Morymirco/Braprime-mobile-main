@@ -3,10 +3,10 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Language, useLanguage } from '../../lib/contexts/LanguageContext';
+import { useI18n } from '../../lib/contexts/I18nContext';
 
 interface LanguageOption {
-  code: Language;
+  code: 'fr' | 'en' | 'ar';
   name: string;
   nativeName: string;
   flag: string;
@@ -35,14 +35,14 @@ const languages: LanguageOption[] = [
 
 export default function LanguageScreen() {
   const router = useRouter();
-  const { language, setLanguage, t } = useLanguage();
-  const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
+  const { language, setLanguage, t, isRTL } = useI18n();
+  const [selectedLanguage, setSelectedLanguage] = useState<'fr' | 'en' | 'ar'>(language);
 
   const handleBack = () => {
     router.back();
   };
 
-  const handleLanguageSelect = (lang: Language) => {
+  const handleLanguageSelect = (lang: 'fr' | 'en' | 'ar') => {
     setSelectedLanguage(lang);
   };
 
@@ -51,13 +51,13 @@ export default function LanguageScreen() {
       await setLanguage(selectedLanguage);
       Alert.alert(
         t('common.success'),
-        'La langue a été changée avec succès. L\'application va se redémarrer.',
+        'La langue a été changée avec succès.',
         [
           {
             text: 'OK',
             onPress: () => {
-              // Ici vous pourriez redémarrer l'app ou recharger les traductions
-              router.back();
+              // Rediriger vers l'écran principal au lieu de revenir en arrière
+              router.replace('/(tabs)');
             }
           }
         ]
@@ -68,18 +68,18 @@ export default function LanguageScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { direction: isRTL ? 'rtl' : 'ltr' }]}>
+      <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="black" />
+          <Ionicons name={isRTL ? "chevron-forward" : "chevron-back"} size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.title}>{t('language.select')}</Text>
+        <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{t('language.select')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.description}>
-          Choisissez votre langue préférée pour l'interface de l'application
+        <Text style={[styles.description, { textAlign: isRTL ? 'right' : 'left' }]}>
+          {t('language.description')}
         </Text>
 
         <View style={styles.languageList}>
@@ -88,15 +88,16 @@ export default function LanguageScreen() {
               key={lang.code}
               style={[
                 styles.languageItem,
-                selectedLanguage === lang.code && styles.languageItemSelected
+                selectedLanguage === lang.code && styles.languageItemSelected,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' }
               ]}
               onPress={() => handleLanguageSelect(lang.code)}
             >
-              <View style={styles.languageInfo}>
+              <View style={[styles.languageInfo, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 <Text style={styles.languageFlag}>{lang.flag}</Text>
-                <View style={styles.languageTexts}>
-                  <Text style={styles.languageName}>{lang.nativeName}</Text>
-                  <Text style={styles.languageSubtitle}>{lang.name}</Text>
+                <View style={[styles.languageTexts, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+                  <Text style={[styles.languageName, { textAlign: isRTL ? 'right' : 'left' }]}>{lang.nativeName}</Text>
+                  <Text style={[styles.languageSubtitle, { textAlign: isRTL ? 'right' : 'left' }]}>{lang.name}</Text>
                 </View>
               </View>
               
@@ -116,7 +117,7 @@ export default function LanguageScreen() {
           style={styles.saveButton}
           onPress={handleSave}
         >
-          <Text style={styles.saveButtonText}>{t('language.save')}</Text>
+          <Text style={[styles.saveButtonText, { textAlign: isRTL ? 'right' : 'left' }]}>{t('language.save')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

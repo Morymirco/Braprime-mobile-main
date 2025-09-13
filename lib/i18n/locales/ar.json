@@ -1,0 +1,107 @@
+{
+  "common": {
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجح",
+    "confirm": "تأكيد",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "back": "رجوع",
+    "continue": "متابعة",
+    "done": "تم"
+  },
+  "navigation": {
+    "home": "الرئيسية",
+    "services": "الخدمات",
+    "cart": "السلة",
+    "profile": "الملف الشخصي"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "signup": "إنشاء حساب",
+    "logout": "تسجيل الخروج",
+    "email": "عنوان البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "confirmPassword": "تأكيد كلمة المرور",
+    "fullName": "الاسم الكامل",
+    "phone": "رقم الهاتف",
+    "address": "العنوان",
+    "loginButton": "تسجيل الدخول",
+    "signupButton": "إنشاء حساب",
+    "noAccount": "ليس لديك حساب؟",
+    "hasAccount": "لديك حساب بالفعل؟",
+    "loginError": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "signupError": "خطأ في إنشاء الحساب",
+    "logoutConfirm": "هل أنت متأكد من أنك تريد تسجيل الخروج؟",
+    "logoutCancel": "إلغاء",
+    "logoutAction": "تسجيل الخروج"
+  },
+  "profile": {
+    "title": "حسابي",
+    "edit": "تعديل الملف الشخصي",
+    "language": "اللغة",
+    "chat": "تحدث معنا",
+    "payment": "طرق الدفع",
+    "map": "تطبيق الخريطة الافتراضي",
+    "subscription": "إعدادات الاشتراك",
+    "terms": "الشروط والخدمات",
+    "privacy": "سياسة الخصوصية",
+    "signout": "تسجيل الخروج",
+    "settings": "الإعدادات",
+    "myOrders": "طلباتي",
+    "myPackages": "طرودي",
+    "myReservations": "حجوزاتي",
+    "myFavorites": "مفضلاتي",
+    "reviewApp": "تقييم التطبيق",
+    "stats": "إحصائياتي",
+    "orders": "الطلبات",
+    "packages": "الطرود",
+    "reservations": "الحجوزات"
+  },
+  "language": {
+    "select": "اختر اللغة",
+    "save": "حفظ",
+    "french": "Français",
+    "english": "English",
+    "arabic": "العربية",
+    "description": "اختر لغتك المفضلة لواجهة التطبيق"
+  },
+  "editProfile": {
+    "title": "تعديل الملف الشخصي",
+    "name": "الاسم الكامل",
+    "phone": "رقم الهاتف",
+    "email": "عنوان البريد الإلكتروني",
+    "emailDisabled": "لا يمكن تعديل عنوان البريد الإلكتروني",
+    "save": "حفظ",
+    "delete": "حذف الحساب",
+    "deleteConfirm": "هل أنت متأكد من أنك تريد حذف حسابك؟ هذا الإجراء لا يمكن التراجع عنه.",
+    "deleteCancel": "إلغاء",
+    "deleteAction": "حذف",
+    "loading": "جاري تحميل الملف الشخصي...",
+    "success": "تم تحديث الملف الشخصي بنجاح!",
+    "errorName": "الاسم مطلوب.",
+    "errorGeneral": "حدث خطأ غير متوقع.",
+    "errorUpdate": "خطأ في تحديث الملف الشخصي.",
+    "disclaimer": "سيتم إرسال اتصالات BraPrime وسجل المعاملات إلى عنوان البريد الإلكتروني المؤكد"
+  },
+  "map": {
+    "title": "تطبيق الخريطة الافتراضي",
+    "subtitle": "سيتم فتحه لعرض عنوان الطلب",
+    "google": "خرائط جوجل",
+    "apple": "خرائط آبل"
+  },
+  "payment": {
+    "title": "إضافة بطاقة جديدة",
+    "cardNumber": "رقم البطاقة",
+    "expiry": "تاريخ انتهاء الصلاحية",
+    "cvv": "CVV",
+    "holder": "اسم حامل البطاقة",
+    "save": "حفظ البطاقة"
+  },
+  "splash": {
+    "selectLanguage": "اختر لغتك",
+    "madeInConakry": "صُنع في كوناكري بـ ❤️"
+  }
+}

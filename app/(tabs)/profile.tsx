@@ -7,82 +7,78 @@ import ProfileSkeleton from '../../components/ProfileSkeleton';
 import { useProfile } from '../../hooks/useProfile';
 import { useUserStats } from '../../hooks/useUserStats';
 import { useAuth } from '../../lib/contexts/AuthContext';
+import { useI18n } from '../../lib/contexts/I18nContext';
 
 interface IconProps {
   size: number;
   color: string;
 }
 
-const MENU_ITEMS = [
+// Fonction pour créer les éléments de menu avec traductions
+const createMenuItems = (t: (key: string) => string, currentLanguage: string) => [
   {
     id: 'orders',
-    title: 'Mes Commandes',
+    title: t('profile.myOrders'),
     icon: (props: IconProps) => <MaterialIcons name="receipt-long" {...props} />,
     onPress: (router: Router) => router.push('/orders'),
   },
   {
     id: 'package-orders',
-    title: 'Mes Colis',
+    title: t('profile.myPackages'),
     icon: (props: IconProps) => <MaterialIcons name="inventory" {...props} />,
     onPress: (router: Router) => router.push('/package-orders'),
   },
   {
     id: 'reservations',
-    title: 'Mes Réservations',
+    title: t('profile.myReservations'),
     icon: (props: IconProps) => <MaterialIcons name="event-available" {...props} />,
     onPress: (router: Router) => router.push('/reservations'),
   },
   {
     id: 'favorites',
-    title: 'Mes Favoris',
+    title: t('profile.myFavorites'),
     icon: (props: IconProps) => <MaterialIcons name="favorite-outline" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/favorites'),
   },
   {
     id: 'settings',
-    title: 'Paramètres',
+    title: t('profile.settings'),
     icon: (props: IconProps) => <Ionicons name="settings-outline" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/profile/settings'),
   },
   {
     id: 'language',
-    title: 'Langue',
+    title: `${t('profile.language')} (${currentLanguage === 'fr' ? '🇫🇷 Français' : currentLanguage === 'en' ? '🇺🇸 English' : '🇸🇦 العربية'})`,
     icon: (props: IconProps) => <MaterialCommunityIcons name="translate" {...props} />,
     showArrow: true,
+    onPress: (router: Router) => router.push('/profile/language'),
   },
   {
     id: 'chat',
-    title: 'Discuter avec nous',
+    title: t('profile.chat'),
     icon: (props: IconProps) => <Ionicons name="chatbubble-outline" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/chat'),
   },
-  // {
-  //   id: 'map',
-  //   title: 'Application de carte par défaut',
-  //   icon: (props: IconProps) => <MaterialCommunityIcons name="map-marker-outline" {...props} />,
-  //   showArrow: true,
-  //   onPress: (router: Router) => router.push('/map/default-map'),
-  // },
   {
     id: 'terms',
-    title: 'Conditions et services',
+    title: t('profile.terms'),
     icon: (props: IconProps) => <MaterialIcons name="description" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/terms'),
   },
   {
     id: 'privacy',
-    title: 'Politique de confidentialité',
+    title: t('profile.privacy'),
     icon: (props: IconProps) => <MaterialIcons name="lock-outline" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/privacy'),
   },
   {
     id: 'review',
-    title: 'Donner un avis',
+    title: t('profile.reviewApp'),
     icon: (props: IconProps) => <MaterialIcons name="thumb-up-off-alt" {...props} />,
     showArrow: true,
     onPress: (router: Router) => router.push('/app-review'),
@@ -93,12 +89,16 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const { profile, loading, error, refetch } = useProfile();
+  const { t, language } = useI18n();
   
   // Utiliser le hook pour les statistiques
   const { stats, loading: statsLoading, error: statsError, forceRefresh } = useUserStats(profile?.id);
   
   // État pour le pull-to-refresh
   const [refreshing, setRefreshing] = React.useState(false);
+  
+  // Créer les éléments de menu avec traductions
+  const MENU_ITEMS = createMenuItems(t, language);
 
   const handleEditName = () => {
     router.push('/profile/edit');
@@ -127,16 +127,22 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      t('auth.logout'),
+      t('auth.logoutConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('auth.logoutCancel'), style: 'cancel' },
         {
-          text: 'Déconnecter',
+          text: t('auth.logoutAction'),
           style: 'destructive',
           onPress: async () => {
-            await signOut();
-            router.replace('/login');
+            try {
+              await signOut();
+              // Ne pas faire de navigation manuelle ici
+              // AuthGuard gérera automatiquement la redirection vers /login
+            } catch (error) {
+              console.error('Erreur lors de la déconnexion:', error);
+              Alert.alert(t('common.error'), t('auth.logoutError') || 'Erreur lors de la déconnexion');
+            }
           },
         },
       ]
@@ -155,9 +161,9 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Erreur: {error}</Text>
+          <Text style={styles.errorText}>{t('common.error')}: {error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
-            <Text style={styles.retryText}>Réessayer</Text>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -167,7 +173,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Mon Compte</Text>
+        <Text style={styles.title}>{t('profile.title')}</Text>
         <TouchableOpacity 
           style={styles.settingsButton}
           onPress={() => router.push('/profile/settings')}
@@ -184,7 +190,7 @@ export default function ProfileScreen() {
             onRefresh={onRefresh}
             colors={['#E31837']} // Android
             tintColor="#E31837" // iOS
-            title="Actualisation..." // iOS
+            title={t('common.loading')} // iOS
             titleColor="#666" // iOS
           />
         }
@@ -200,10 +206,10 @@ export default function ProfileScreen() {
             />
             <View style={styles.userNameContainer}>
               <Text style={styles.userName}>
-                {profile?.name || 'Nom non défini'}
+                {profile?.name || t('profile.nameUndefined')}
               </Text>
               <Text style={styles.userEmail}>
-                {profile?.email || 'Email non défini'}
+                {profile?.email || t('profile.emailUndefined')}
               </Text>
             </View>
             <Feather name="chevron-right" size={20} color="#666" style={styles.editArrow} />
@@ -212,12 +218,12 @@ export default function ProfileScreen() {
           {/* Statistiques utilisateur */}
           <View style={styles.statsHeader}>
             <View style={styles.statsTitleContainer}>
-              <Text style={styles.statsTitle}>Mes Statistiques</Text>
+              <Text style={styles.statsTitle}>{t('profile.stats')}</Text>
               {statsLoading && (
-                <Text style={styles.statsSubtitle}>Mise à jour...</Text>
+                <Text style={styles.statsSubtitle}>{t('common.loading')}</Text>
               )}
               {statsError && (
-                <Text style={styles.statsError}>Erreur de chargement</Text>
+                <Text style={styles.statsError}>{t('common.error')}</Text>
               )}
             </View>
             <TouchableOpacity 
@@ -247,7 +253,7 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.statValue}>{stats.orders}</Text>
                 )}
-                <Text style={styles.statLabel}>Commandes</Text>
+                <Text style={styles.statLabel}>{t('profile.orders')}</Text>
               </View>
             </View>
             
@@ -261,7 +267,7 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.statValue}>{stats.packages}</Text>
                 )}
-                <Text style={styles.statLabel}>Colis</Text>
+                <Text style={styles.statLabel}>{t('profile.packages')}</Text>
               </View>
             </View>
             
@@ -275,7 +281,7 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.statValue}>{stats.reservations}</Text>
                 )}
-                <Text style={styles.statLabel}>Réservations</Text>
+                <Text style={styles.statLabel}>{t('profile.reservations')}</Text>
               </View>
             </View>
           </View>
@@ -308,7 +314,7 @@ export default function ProfileScreen() {
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Se déconnecter</Text>
+          <Text style={styles.logoutText}>{t('auth.logout')}</Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>

@@ -195,16 +195,19 @@ export class AuthService {
   }
 
   // Déconnexion
-  static async logout(): Promise<void> {
+  static async logout(): Promise<{ error: string | null }> {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('❌ [AuthService] Erreur lors de la déconnexion:', error);
+        return { error: error.message || 'Erreur lors de la déconnexion' };
       } else {
         console.log('✅ [AuthService] Déconnexion réussie');
+        return { error: null };
       }
     } catch (error) {
       console.error('❌ [AuthService] Erreur inattendue lors de la déconnexion:', error);
+      return { error: error instanceof Error ? error.message : 'Erreur inattendue lors de la déconnexion' };
     }
   }
 

@@ -18,6 +18,7 @@ import CartSkeleton from '../../components/CartSkeleton';
 import ToastContainer from '../../components/ToastContainer';
 import { useCart } from '../../hooks/use-cart';
 import { useAuth } from '../../lib/contexts/AuthContext';
+import { useI18n } from '../../lib/contexts/I18nContext';
 import { useToast } from '../../lib/contexts/ToastContext';
 import { MenuItemWithCategory } from '../../lib/services/MenuService';
 
@@ -197,6 +198,7 @@ function CartItemDetail({ item, visible, onClose, onUpdateQuantity, onRemove }: 
 
 export default function CartScreen() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const { 
     cart, 
     loading, 
@@ -437,7 +439,7 @@ export default function CartScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="shopping-cart" size={64} color="#CCC" />
-          <Text style={styles.emptyTitle}>Votre panier est vide</Text>
+          <Text style={styles.emptyTitle}>{t('cart.empty')}</Text>
           <Text style={styles.emptyMessage}>
             Ajoutez des articles à votre panier pour commencer vos achats.
           </Text>
@@ -460,7 +462,7 @@ export default function CartScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>Mon Panier</Text>
+          <Text style={styles.title}>{t('cart.title')}</Text>
         </View>
         <Text style={styles.subtitle}>
           {getItemCount()} article{getItemCount() !== 1 ? 's' : ''} • {
@@ -762,7 +764,7 @@ export default function CartScreen() {
                 return (
                   <View style={styles.emptyCartContainer}>
                     <MaterialIcons name="shopping-cart-outline" size={64} color="#CCC" />
-                    <Text style={styles.emptyCartTitle}>Votre panier est vide</Text>
+                    <Text style={styles.emptyCartTitle}>{t('cart.empty')}</Text>
                     <Text style={styles.emptyCartSubtitle}>
                       Ajoutez des articles pour commencer vos achats
                     </Text>
@@ -874,7 +876,7 @@ export default function CartScreen() {
           )}
           
           <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>{t('cart.total')}</Text>
             <Text style={styles.totalValue}>
               {getFinalTotal().toLocaleString()} GNF
             </Text>

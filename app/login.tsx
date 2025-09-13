@@ -16,9 +16,8 @@ export default function LoginScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleBack = () => {
-    // Rediriger vers la page d'accueil ou splash au lieu de router.back()
-    // car il n'y a pas forcément d'écran précédent
-    router.replace('/initial-splash');
+    // Rediriger vers la page de sélection de langue
+    router.replace('/splash');
   };
 
   const handleLogin = async () => {

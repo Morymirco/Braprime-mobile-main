@@ -1,12 +1,13 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessTypesGrid from '../../components/BusinessTypesGrid';
 import BusinessTypesSkeleton from '../../components/BusinessTypesSkeleton';
 import { useBusinessTypes } from '../../hooks/useBusinessTypes';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useI18n } from '../../lib/contexts/I18nContext';
 import { BusinessType } from '../../lib/services/BusinessTypeService';
 
 const { width } = Dimensions.get('window');
@@ -39,6 +40,27 @@ export default function HomeScreen() {
   const { unreadCount } = useNotifications();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const { t } = useI18n();
+  
+  // Référence pour le ScrollView des banners
+  const bannerScrollRef = useRef<ScrollView>(null);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+
+  // Défilement automatique des banners toutes les 2 secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % BANNERS.length;
+        bannerScrollRef.current?.scrollTo({
+          x: nextIndex * width,
+          animated: true,
+        });
+        return nextIndex;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Fonction pour formater le nom du type de commerce
   const formatBusinessTypeName = (name: string) => {
@@ -87,6 +109,13 @@ export default function HomeScreen() {
     router.push('/notifications');
   };
 
+  // Fonction pour gérer le défilement manuel des banners
+  const handleBannerScroll = (event: any) => {
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(contentOffsetX / width);
+    setCurrentBannerIndex(index);
+  };
+
   // Fonction de gestion du refresh
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -104,7 +133,7 @@ export default function HomeScreen() {
       {/* Address Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.addressLabel}>Adresse</Text>
+          <Text style={styles.addressLabel}>{t('home.address')}</Text>
           <TouchableOpacity style={styles.addressButton}>
             <Text style={styles.addressText}>Conakry, Conakry, Guinée</Text>
           </TouchableOpacity>
@@ -131,7 +160,7 @@ export default function HomeScreen() {
       >
         <MaterialIcons name="search" size={24} color="#666" />
         <Text style={styles.searchPlaceholder}>
-          Rechercher des commerces ou produits
+          {t('home.searchPlaceholder')}
         </Text>
       </TouchableOpacity>
 
@@ -149,10 +178,13 @@ export default function HomeScreen() {
       >
         {/* Scrollable Banners */}
         <ScrollView
+          ref={bannerScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           pagingEnabled
           style={styles.bannerScroll}
+          onScroll={handleBannerScroll}
+          scrollEventThrottle={16}
         >
           {BANNERS.map((banner) => (
             <TouchableOpacity 
@@ -172,12 +204,25 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
+        {/* Indicateurs de pagination */}
+        <View style={styles.paginationContainer}>
+          {BANNERS.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.paginationDot,
+                index === currentBannerIndex && styles.paginationDotActive
+              ]}
+            />
+          ))}
+        </View>
+
         {/* Services Grid */}
         {loading ? (
           <BusinessTypesSkeleton count={8} />
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Erreur de chargement des services</Text>
+            <Text style={styles.errorText}>{t('common.error')}</Text>
           </View>
         ) : (
           <BusinessTypesGrid 
@@ -190,12 +235,12 @@ export default function HomeScreen() {
         {/* Services Section */}
         <View style={styles.servicesSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Services</Text>
+            <Text style={styles.sectionTitle}>{t('home.popularServices')}</Text>
             <View style={styles.newBadge}>
               <Text style={styles.newBadgeText}>New</Text>
             </View>
             <TouchableOpacity style={styles.seeAllButton} onPress={handleSeeAllServices}>
-              <Text style={styles.seeAllText}>See all</Text>
+              <Text style={styles.seeAllText}>{t('home.viewAll')}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -216,7 +261,7 @@ export default function HomeScreen() {
               ))
             ) : error ? (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>Erreur de chargement</Text>
+                <Text style={styles.errorText}>{t('common.error')}</Text>
               </View>
             ) : (
               businessTypes.slice(0, 4).map((businessType) => (
@@ -415,5 +460,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 4,
+  },
+  paginationDotActive: {
+    backgroundColor: '#E31837',
+    width: 12,
+    height: 8,
+    borderRadius: 4,
   },
 });

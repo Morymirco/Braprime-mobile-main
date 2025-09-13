@@ -69,6 +69,12 @@ const translations = {
     'payment.holder': 'Nom du titulaire',
     'payment.save': 'Enregistrer la carte',
     
+    // Navigation
+    'nav.home': 'Accueil',
+    'nav.services': 'Services',
+    'nav.cart': 'Panier',
+    'nav.profile': 'Profil',
+    
     // Common
     'common.cancel': 'Annuler',
     'common.save': 'Enregistrer',
@@ -135,6 +141,12 @@ const translations = {
     'payment.holder': 'Cardholder Name',
     'payment.save': 'Save Card',
     
+    // Navigation
+    'nav.home': 'Home',
+    'nav.services': 'Services',
+    'nav.cart': 'Cart',
+    'nav.profile': 'Profile',
+    
     // Common
     'common.cancel': 'Cancel',
     'common.save': 'Save',
@@ -200,6 +212,12 @@ const translations = {
     'payment.cvv': 'CVV',
     'payment.holder': 'اسم حامل البطاقة',
     'payment.save': 'حفظ البطاقة',
+    
+    // Navigation
+    'nav.home': 'الرئيسية',
+    'nav.services': 'الخدمات',
+    'nav.cart': 'السلة',
+    'nav.profile': 'الملف الشخصي',
     
     // Common
     'common.cancel': 'إلغاء',

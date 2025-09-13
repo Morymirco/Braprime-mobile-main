@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useCart } from '../../hooks/use-cart';
 import { AuthGuard } from '../../lib/components/AuthGuard';
+import { useI18n } from '../../lib/contexts/I18nContext';
 
 // Composant pour l'icône du panier avec badge
 function CartIconWithBadge({ color }: { color: string }) {
@@ -26,6 +27,8 @@ function CartIconWithBadge({ color }: { color: string }) {
 }
 
 export default function TabLayout() {
+  const { t, isRTL } = useI18n();
+
   return (
     <AuthGuard>
       <Tabs
@@ -36,12 +39,16 @@ export default function TabLayout() {
           tabBarLabelStyle: {
             fontSize: 12,
           },
+          // Support RTL
+          tabBarStyle: {
+            direction: isRTL ? 'rtl' : 'ltr',
+          },
         }}
       >
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
+            title: t('navigation.home'),
             tabBarIcon: ({ color }) => (
               <MaterialIcons name="home" size={24} color={color} />
             ),
@@ -50,7 +57,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="services"
           options={{
-            title: 'All Services',
+            title: t('navigation.services'),
             tabBarIcon: ({ color }) => (
               <MaterialIcons name="grid-view" size={24} color={color} />
             ),
@@ -59,7 +66,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="cart"
           options={{
-            title: 'Cart',
+            title: t('navigation.cart'),
             tabBarIcon: ({ color }) => (
               <CartIconWithBadge color={color} />
             ),
@@ -68,7 +75,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="profile"
           options={{
-            title: 'Profile',
+            title: t('navigation.profile'),
             tabBarIcon: ({ color }) => (
               <MaterialIcons name="person" size={24} color={color} />
             ),

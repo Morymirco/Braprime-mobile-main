@@ -121,11 +121,6 @@ export default function BusinessDetailScreen() {
     }
   }, [business?.phone]);
 
-  const handleEmailPress = useCallback(() => {
-    if (business?.email) {
-      Linking.openURL(`mailto:${business.email}`);
-    }
-  }, [business?.email]);
 
   const handleCategoryPress = useCallback((categoryId: number) => {
     setSelectedCategory(selectedCategory === categoryId ? null : categoryId);
@@ -431,10 +426,6 @@ export default function BusinessDetailScreen() {
                   </Text>
                 </View>
                 
-                <View style={styles.deliveryInfo}>
-                  <MaterialIcons name="access-time" size={16} color="#FFF" />
-                  <Text style={styles.deliveryText}>{business.delivery_time}</Text>
-                </View>
               </View>
             </View>
           </View>
@@ -453,16 +444,30 @@ export default function BusinessDetailScreen() {
             </View>
           </View>
 
-          {/* Statut d'ouverture */}
-          <View style={styles.statusContainer}>
-            <View style={[
-              styles.statusIndicator,
-              { backgroundColor: business.is_open ? '#00C853' : '#E31837' }
-            ]} />
-            <Text style={styles.statusText}>
-              {business.is_open ? 'Ouvert' : 'Fermé'}
-            </Text>
+        </View>
+
+        {/* Informations de contact */}
+        <View style={styles.contactSection}>
+          <Text style={styles.sectionTitle}>Informations de contact</Text>
+          
+          <View style={styles.contactItem}>
+            <MaterialIcons name="location-on" size={20} color="#666" />
+            <Text style={styles.contactText}>{business.address}</Text>
           </View>
+
+          {business.phone && (
+            <TouchableOpacity style={styles.contactItem} onPress={handleCallPress}>
+              <MaterialIcons name="phone" size={20} color="#666" />
+              <Text style={[styles.contactText, styles.linkText]}>{business.phone}</Text>
+            </TouchableOpacity>
+          )}
+
+          {business.opening_hours && (
+            <View style={styles.contactItem}>
+              <MaterialIcons name="access-time" size={20} color="#666" />
+              <Text style={styles.contactText}>{business.opening_hours}</Text>
+            </View>
+          )}
         </View>
 
         {/* Section Menu */}
@@ -622,60 +627,6 @@ export default function BusinessDetailScreen() {
               </View>
             </>
           )}
-        </View>
-
-        {/* Informations de contact */}
-        <View style={styles.contactSection}>
-          <Text style={styles.sectionTitle}>Informations de contact</Text>
-          
-          <View style={styles.contactItem}>
-            <MaterialIcons name="location-on" size={20} color="#666" />
-            <Text style={styles.contactText}>{business.address}</Text>
-          </View>
-
-          {business.phone && (
-            <TouchableOpacity style={styles.contactItem} onPress={handleCallPress}>
-              <MaterialIcons name="phone" size={20} color="#666" />
-              <Text style={[styles.contactText, styles.linkText]}>{business.phone}</Text>
-            </TouchableOpacity>
-          )}
-
-          {business.email && (
-            <TouchableOpacity style={styles.contactItem} onPress={handleEmailPress}>
-              <MaterialIcons name="email" size={20} color="#666" />
-              <Text style={[styles.contactText, styles.linkText]}>{business.email}</Text>
-            </TouchableOpacity>
-          )}
-
-          {business.opening_hours && (
-            <View style={styles.contactItem}>
-              <MaterialIcons name="access-time" size={20} color="#666" />
-              <Text style={styles.contactText}>{business.opening_hours}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Informations de livraison */}
-        <View style={styles.deliverySection}>
-          <Text style={styles.sectionTitle}>Informations de livraison</Text>
-          
-          <View style={styles.deliveryItem}>
-            <MaterialIcons name="access-time" size={20} color="#666" />
-            <Text style={styles.deliveryText}>Temps de livraison: {business.delivery_time}</Text>
-          </View>
-
-          <View style={styles.deliveryItem}>
-            <MaterialIcons name="local-shipping" size={20} color="#666" />
-            <Text style={styles.deliveryText}>Frais de livraison: {business.delivery_fee.toLocaleString()} GNF</Text>
-          </View>
-
-          {/* Note sur les services de colis */}
-          <View style={styles.packageServiceNote}>
-            <MaterialIcons name="info" size={16} color="#3B82F6" />
-            <Text style={styles.packageServiceNoteText}>
-              Les services de colis sont disponibles dans le menu ci-dessous
-            </Text>
-          </View>
         </View>
 
         {/* Section des avis */}
@@ -946,15 +897,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFF',
   },
-  deliveryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deliveryText: {
-    fontSize: 14,
-    color: '#FFF',
-    marginLeft: 4,
-  },
   mainInfo: {
     padding: 16,
     backgroundColor: '#fff',
@@ -978,17 +920,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginRight: 8,
   },
   menuSection: {
     marginTop: 8,
@@ -1144,16 +1075,6 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#E31837',
     textDecorationLine: 'underline',
-  },
-  deliverySection: {
-    marginTop: 8,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  deliveryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
   },
   bottomSpacer: {
     height: 20,
@@ -1329,19 +1250,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  packageServiceNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  packageServiceNoteText: {
-    color: '#1976D2',
-    fontSize: 14,
-    marginLeft: 8,
-    flex: 1,
   },
 }); 

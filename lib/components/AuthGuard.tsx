@@ -21,10 +21,14 @@ export function AuthGuard({
     if (!loading) {
       if (requireAuth && !isAuthenticated) {
         // Rediriger vers la page de connexion si l'utilisateur n'est pas connecté
+        console.log('🔒 AuthGuard: Utilisateur non authentifié, redirection vers:', redirectTo);
         router.replace(redirectTo);
       } else if (requireAuth && isAuthenticated && !sessionValid) {
         // Session invalide, essayer de la rafraîchir
+        console.log('🔄 AuthGuard: Session invalide, tentative de rafraîchissement');
         refreshSession();
+      } else if (requireAuth && isAuthenticated && sessionValid) {
+        console.log('✅ AuthGuard: Utilisateur authentifié et session valide');
       }
     }
   }, [user, loading, isAuthenticated, sessionValid, requireAuth, redirectTo, router, refreshSession]);

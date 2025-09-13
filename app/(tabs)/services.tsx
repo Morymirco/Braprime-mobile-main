@@ -5,6 +5,7 @@ import { Dimensions, Image, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BusinessTypesSkeleton from '../../components/BusinessTypesSkeleton';
 import { useBusinessTypes } from '../../hooks/useBusinessTypes';
+import { useI18n } from '../../lib/contexts/I18nContext';
 import { BusinessType } from '../../lib/services/BusinessTypeService';
 
 const { width } = Dimensions.get('window');
@@ -15,6 +16,7 @@ export default function ServicesScreen() {
   const { businessTypes, loading, error, refetch } = useBusinessTypes();
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
+  const { t } = useI18n();
 
   // Fonction pour formater le nom du type de commerce
   const formatBusinessTypeName = (name: string) => {
@@ -66,7 +68,7 @@ export default function ServicesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tous les Services</Text>
+        <Text style={styles.title}>{t('services.allServices')}</Text>
         <TouchableOpacity style={styles.locationButton}>
           <Text style={styles.location}>Conakry</Text>
           <MaterialIcons name="keyboard-arrow-down" size={24} color="black" />
@@ -94,10 +96,10 @@ export default function ServicesScreen() {
         ) : error ? (
           <View style={styles.errorContainer}>
             <MaterialIcons name="error-outline" size={48} color="#E31837" />
-            <Text style={styles.errorTitle}>Erreur de chargement</Text>
+            <Text style={styles.errorTitle}>{t('common.error')}</Text>
             <Text style={styles.errorMessage}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
-              <Text style={styles.retryText}>Réessayer</Text>
+              <Text style={styles.retryText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -139,23 +141,23 @@ export default function ServicesScreen() {
         {/* Statistiques */}
         {!loading && !error && businessTypes.length > 0 && (
           <View style={styles.statsContainer}>
-            <Text style={styles.statsTitle}>Statistiques</Text>
+            <Text style={styles.statsTitle}>{t('services.stats')}</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>{businessTypes.length}</Text>
-                <Text style={styles.statLabel}>Types de services</Text>
+                <Text style={styles.statLabel}>{t('services.serviceTypes')}</Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>
                   {businessTypes.filter(type => getBadge(type.name)).length}
                 </Text>
-                <Text style={styles.statLabel}>Services spéciaux</Text>
+                <Text style={styles.statLabel}>{t('services.specialServices')}</Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>
                   {businessTypes.filter(type => type.image_url).length}
                 </Text>
-                <Text style={styles.statLabel}>Avec images</Text>
+                <Text style={styles.statLabel}>{t('services.withImages')}</Text>
               </View>
             </View>
           </View>
@@ -165,9 +167,9 @@ export default function ServicesScreen() {
         {!loading && !error && businessTypes.length === 0 && (
           <View style={styles.emptyContainer}>
             <MaterialIcons name="category" size={64} color="#CCC" />
-            <Text style={styles.emptyTitle}>Aucun service disponible</Text>
+            <Text style={styles.emptyTitle}>{t('services.noServices')}</Text>
             <Text style={styles.emptyMessage}>
-              Les services seront bientôt disponibles. Veuillez réessayer plus tard.
+              {t('services.noServicesMessage')}
             </Text>
           </View>
         )}

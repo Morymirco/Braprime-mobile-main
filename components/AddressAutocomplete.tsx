@@ -93,18 +93,24 @@ export default function AddressAutocomplete({
 
   // Debounce pour éviter trop de requêtes
   useEffect(() => {
+    console.log('🔍 useEffect searchPlaces - value:', value, 'justSelected:', justSelected);
+    
     if (!value || value.length < 3 || justSelected) {
+      console.log('❌ Conditions non remplies - nettoyage des suggestions');
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
+    console.log('✅ Conditions remplies - lancement de la recherche pour:', value);
     const timeoutId = setTimeout(async () => {
       await searchPlaces(value);
     }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [value, justSelected]);
+
+  // Supprimer l'effet de fermeture automatique qui causait le problème
 
   // Debounce pour la recherche sur la carte
   useEffect(() => {
@@ -122,15 +128,22 @@ export default function AddressAutocomplete({
   }, [mapSearchQuery]);
 
   const searchPlaces = async (query: string) => {
-    if (!query || query.length < 3) return;
+    console.log('🔍 searchPlaces appelé avec query:', query);
+    
+    if (!query || query.length < 3) {
+      console.log('❌ Query trop court ou vide');
+      return;
+    }
 
     try {
       // Utilisation de l'API Google Places pour des résultats réels
       const apiKey = MAPS_CONFIG.GOOGLE_MAPS_API_KEY;
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&location=9.6412,-13.5784&radius=50000&language=fr&key=${apiKey}`;
       
+      console.log('🌐 Appel API Google Places:', url);
       const response = await fetch(url);
       const data = await response.json();
+      console.log('📡 Réponse API Google Places:', data);
       
       if (data.status === 'OK' && data.predictions) {
         // Convertir les prédictions en format Place
@@ -146,15 +159,17 @@ export default function AddressAutocomplete({
           },
         }));
         
+        console.log('✅ Suggestions Google trouvées:', places.length);
         setSuggestions(places);
-        setShowSuggestions(true);
+        setShowSuggestions(places.length > 0);
       } else {
+        console.log('⚠️ API Google échouée ou pas de résultats, utilisation du fallback');
         // Fallback avec des suggestions locales si l'API échoue
         const fallbackPlaces: Place[] = [
           {
             place_id: 'fallback_1',
             formatted_address: `${query}, Conakry, Guinée`,
-            name: query,
+            name: `${query} (Conakry)`,
             geometry: {
               location: {
                 lat: 9.6412 + (Math.random() - 0.5) * 0.1,
@@ -165,7 +180,7 @@ export default function AddressAutocomplete({
           {
             place_id: 'fallback_2',
             formatted_address: `${query} Centre, Conakry, Guinée`,
-            name: `${query} Centre`,
+            name: `Centre de ${query}`,
             geometry: {
               location: {
                 lat: 9.6412 + (Math.random() - 0.5) * 0.1,
@@ -175,11 +190,12 @@ export default function AddressAutocomplete({
           },
         ];
         
+        console.log('🔄 Suggestions fallback générées:', fallbackPlaces.length);
         setSuggestions(fallbackPlaces);
-        setShowSuggestions(true);
+        setShowSuggestions(fallbackPlaces.length > 0);
       }
     } catch (error) {
-      console.error('Erreur lors de la recherche d\'adresses:', error);
+      console.error('❌ Erreur lors de la recherche d\'adresses:', error);
       // En cas d'erreur, ne pas afficher de suggestions
       setSuggestions([]);
       setShowSuggestions(false);
@@ -187,31 +203,55 @@ export default function AddressAutocomplete({
   };
 
   const handlePlaceSelect = (place: Place) => {
+    console.log('handlePlaceSelect appelé avec:', place);
+    
+    // Enregistrer le timestamp de la sélection
+    (window as any).lastSelectionTime = Date.now();
+    
     // Fermer les suggestions immédiatement
     setShowSuggestions(false);
+    setSuggestions([]);
     setJustSelected(true);
     
     // Mettre à jour la valeur
-    onChange(place.formatted_address);
+    const address = place.formatted_address || place.name || '';
+    console.log('Mise à jour de l\'adresse:', address);
+    onChange(address);
     
     if (onPlaceSelect) {
       onPlaceSelect(place);
     }
+    
+    // Réinitialiser justSelected après un court délai
+    setTimeout(() => {
+      setJustSelected(false);
+    }, 500);
   };
 
   const handleInputChange = (text: string) => {
-    onChange(text);
-    
-    // Si une sélection vient d'être faite, ne pas rouvrir les suggestions
-    if (justSelected) {
+    // Si une sélection vient d'être faite, ne pas modifier le texte pendant un court moment
+    if (justSelected && Date.now() - (window as any).lastSelectionTime < 1000) {
+      console.log('Sélection récente, ignore le changement');
       return;
     }
+    
+    onChange(text);
     
     // Le debounce dans useEffect se chargera de la recherche
     // On ne fait que gérer l'affichage immédiat
     if (text.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
+    }
+  };
+
+  const handleInputFocus = () => {
+    // Réinitialiser l'état de sélection quand l'utilisateur clique dans le champ
+    setJustSelected(false);
+    
+    // Si il y a du texte et des suggestions, les afficher
+    if (value && value.length >= 3 && suggestions.length > 0) {
+      setShowSuggestions(true);
     }
   };
 
@@ -290,7 +330,7 @@ export default function AddressAutocomplete({
           {
             place_id: 'fallback_1',
             formatted_address: `${query}, Conakry, Guinée`,
-            name: query,
+            name: `${query} (Conakry)`,
             geometry: {
               location: {
                 lat: 9.6412 + (Math.random() - 0.5) * 0.1,
@@ -301,7 +341,7 @@ export default function AddressAutocomplete({
           {
             place_id: 'fallback_2',
             formatted_address: `${query} Centre, Conakry, Guinée`,
-            name: `${query} Centre`,
+            name: `Centre de ${query}`,
             geometry: {
               location: {
                 lat: 9.6412 + (Math.random() - 0.5) * 0.1,
@@ -358,22 +398,31 @@ export default function AddressAutocomplete({
     }
   };
 
-  const renderSuggestion = ({ item }: { item: Place }) => (
-    <TouchableOpacity
-      style={styles.suggestionItem}
-      activeOpacity={0.7}
-      onPress={(e) => {
-        e.stopPropagation();
-        handlePlaceSelect(item);
-      }}
-    >
-      <Ionicons name="location-outline" size={20} color="#666" />
-      <View style={styles.suggestionContent}>
-        <Text style={styles.suggestionName}>{item.name || item.formatted_address}</Text>
-        <Text style={styles.suggestionAddress}>{item.formatted_address}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderSuggestion = ({ item }: { item: Place }) => {
+    // Éviter d'afficher le nom s'il est identique à l'adresse formatée
+    const displayName = item.name && item.name !== item.formatted_address ? item.name : null;
+    
+    return (
+      <TouchableOpacity
+        style={styles.suggestionItem}
+        activeOpacity={0.7}
+        onPress={() => {
+          console.log('Suggestion sélectionnée:', item);
+          handlePlaceSelect(item);
+        }}
+      >
+        <Ionicons name="location-outline" size={20} color="#666" />
+        <View style={styles.suggestionContent}>
+          {displayName && (
+            <Text style={styles.suggestionName}>{displayName}</Text>
+          )}
+          <Text style={displayName ? styles.suggestionAddress : styles.suggestionName}>
+            {item.formatted_address}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -390,7 +439,14 @@ export default function AddressAutocomplete({
           style={styles.input}
           value={value}
           onChangeText={handleInputChange}
-        placeholder={placeholder}
+          onFocus={handleInputFocus}
+          onBlur={() => {
+            // Fermer les suggestions après un délai pour permettre la sélection
+            setTimeout(() => {
+              setShowSuggestions(false);
+            }, 200);
+          }}
+          placeholder={placeholder}
           placeholderTextColor="#999"
           multiline
           numberOfLines={2}
@@ -412,7 +468,10 @@ export default function AddressAutocomplete({
       </View>
 
       {/* Suggestions */}
-      {showSuggestions && suggestions.length > 0 && (
+      {(() => {
+        console.log('🎨 Rendu suggestions - showSuggestions:', showSuggestions, 'suggestions.length:', suggestions.length);
+        return showSuggestions && suggestions.length > 0;
+      })() && (
         <View style={styles.suggestionsContainer} pointerEvents="box-none">
           <ScrollView
             style={styles.suggestionsList}
@@ -420,11 +479,14 @@ export default function AddressAutocomplete({
             nestedScrollEnabled={true}
             pointerEvents="auto"
           >
-            {suggestions.map((item) => (
-              <View key={item.place_id} pointerEvents="auto">
-                {renderSuggestion({ item })}
-              </View>
-            ))}
+            {suggestions.map((item, index) => {
+              console.log(`Rendu suggestion ${index}:`, item);
+              return (
+                <View key={item.place_id || index} pointerEvents="auto">
+                  {renderSuggestion({ item })}
+                </View>
+              );
+            })}
           </ScrollView>
         </View>
       )}

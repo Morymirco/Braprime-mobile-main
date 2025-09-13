@@ -1,4 +1,5 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -15,7 +16,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import CommuneQuartierSelector from '../components/CommuneQuartierSelector';
+import { DatePicker } from '../components/DatePicker';
 import PaymentWebView from '../components/PaymentWebView';
+import { TimePicker } from '../components/TimePicker';
 import ToastContainer from '../components/ToastContainer';
 import { useCart } from '../hooks/use-cart';
 import { useAuth } from '../lib/contexts/AuthContext';
@@ -71,6 +74,12 @@ export default function CheckoutScreen() {
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'orange_money' | 'mtn_money'>('orange_money');
 
+  // État pour le calendrier
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // État pour le sélecteur d'heure
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   const paymentMethod = 'card' as const; // Paiement en ligne obligatoire
   
   // Fonction pour mapper les méthodes de paiement UI vers API
@@ -109,7 +118,7 @@ export default function CheckoutScreen() {
 
   // Calculer les totaux
   const cartTotal = cart?.items?.reduce((total, item) => total + (item.price * item.quantity), 0) || 0;
-  const baseDeliveryFee = deliveryMethod === 'delivery' ? 15000 : 0;
+  const baseDeliveryFee = deliveryMethod === 'delivery' ? 0 : 0;
   const deliveryFee = cart?.is_multi_service ? Math.round(baseDeliveryFee * 1.5) : baseDeliveryFee;
   const planningFee = deliveryMethod === 'delivery' && deliveryTimeMode === 'scheduled' ? 2000 : 0; // Frais de planification
   const serviceFee = Math.round(cartTotal * 0.02); // 2% frais de service
@@ -585,6 +594,46 @@ export default function CheckoutScreen() {
     router.back();
   };
 
+  const handleGetCurrentLocation = async () => {
+    try {
+      // Demander la permission de localisation
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        showToast('Permission de localisation refusée', 'error');
+        return;
+      }
+
+      // Obtenir la position actuelle
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      // Récupérer l'adresse à partir des coordonnées
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (reverseGeocode.length > 0) {
+        const address = reverseGeocode[0];
+        const formattedAddress = `${address.street || ''} ${address.name || ''}, ${address.city || ''}, ${address.region || ''}`.trim();
+        
+        setFormData(prev => ({
+          ...prev,
+          address: formattedAddress
+        }));
+        
+        showToast('Position actuelle récupérée', 'success');
+      } else {
+        showToast('Impossible de récupérer l\'adresse', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération de la position:', error);
+      showToast('Erreur lors de la récupération de la position', 'error');
+    }
+  };
+
   // Rediriger vers le panier si pas d'articles (sauf si WebView de paiement ouverte)
   if (!loading && (!cart || cart.items.length === 0) && !showPaymentWebView) {
     return (
@@ -731,7 +780,6 @@ export default function CheckoutScreen() {
                onPress={() => setDeliveryMethod('delivery')}
              >
                <Text style={styles.deliveryOptionTitle}>Livraison à domicile</Text>
-               <Text style={styles.deliveryOptionPrice}>{(deliveryFee || 0).toLocaleString()} GNF</Text>
              </TouchableOpacity>
 
              <TouchableOpacity
@@ -791,31 +839,38 @@ export default function CheckoutScreen() {
                    <View style={styles.inputRow}>
                      <View style={styles.inputContainer}>
                        <Text style={styles.inputLabel}>Date de livraison *</Text>
-                       <TextInput
-                         style={styles.input}
-                         value={scheduledDate ? scheduledDate.toISOString().split('T')[0] : ''}
-                         onChangeText={(text) => {
-                           if (text) {
-                             const date = new Date(text);
-                             if (!isNaN(date.getTime())) {
-                               setScheduledDate(date);
-                             }
+                       <TouchableOpacity
+                         style={styles.dateButton}
+                         onPress={() => setShowDatePicker(true)}
+                       >
+                         <MaterialIcons name="calendar-today" size={20} color="#E31837" />
+                         <Text style={styles.dateButtonText}>
+                           {scheduledDate 
+                             ? scheduledDate.toLocaleDateString('fr-FR', {
+                                 weekday: 'long',
+                                 year: 'numeric',
+                                 month: 'long',
+                                 day: 'numeric'
+                               })
+                             : 'Choisir une date'
                            }
-                         }}
-                         placeholder="YYYY-MM-DD"
-                         placeholderTextColor="#999"
-                       />
+                         </Text>
+                         <MaterialIcons name="keyboard-arrow-down" size={20} color="#666" />
+                       </TouchableOpacity>
                      </View>
                      
                      <View style={styles.inputContainer}>
                        <Text style={styles.inputLabel}>Heure de livraison *</Text>
-                       <TextInput
-                         style={styles.input}
-                         value={scheduledTime}
-                         onChangeText={setScheduledTime}
-                         placeholder="HH:MM"
-                         placeholderTextColor="#999"
-                       />
+                       <TouchableOpacity
+                         style={styles.timeButton}
+                         onPress={() => setShowTimePicker(true)}
+                       >
+                         <MaterialIcons name="access-time" size={20} color="#E31837" />
+                         <Text style={styles.timeButtonText}>
+                           {scheduledTime || 'Choisir une heure'}
+                         </Text>
+                         <MaterialIcons name="keyboard-arrow-down" size={20} color="#666" />
+                       </TouchableOpacity>
                      </View>
                    </View>
                    
@@ -913,19 +968,29 @@ export default function CheckoutScreen() {
               )}
 
               {/* Autocomplétion d'adresse avec carte */}
-              <AddressAutocomplete
-                  value={formData.address}
-                onChange={(address) => setFormData(prev => ({ ...prev, address }))}
-                onPlaceSelect={(place) => {
-                  if (place && place.formatted_address) {
-                    setFormData(prev => ({ ...prev, address: place.formatted_address }));
-                  }
-                }}
-                placeholder="Rechercher et sélectionner une adresse valide..."
-                label="Adresse complète"
-                required={true}
-                showMap={true}
-              />
+              <View style={styles.addressInputRow}>
+                <View style={styles.addressInputContainer}>
+                  <AddressAutocomplete
+                    value={formData.address}
+                    onChange={(address) => setFormData(prev => ({ ...prev, address }))}
+                    onPlaceSelect={(place) => {
+                      if (place && place.formatted_address) {
+                        setFormData(prev => ({ ...prev, address: place.formatted_address }));
+                      }
+                    }}
+                    placeholder="Rechercher une adresse..."
+                    label="Adresse complète"
+                    required={true}
+                    showMap={true}
+                  />
+                </View>
+                <TouchableOpacity 
+                  style={styles.locationButton}
+                  onPress={handleGetCurrentLocation}
+                >
+                  <MaterialIcons name="my-location" size={20} color="#E31837" />
+                </TouchableOpacity>
+              </View>
               
               <Text style={styles.addressHint}>
                 ⚠️ Veuillez sélectionner une adresse depuis la liste pour garantir la validité
@@ -1054,12 +1119,6 @@ export default function CheckoutScreen() {
             <Text style={styles.summaryValue}>{(serviceFee || 0).toLocaleString()} GNF</Text>
           </View>
           
-                     <View style={styles.summaryRow}>
-             <Text style={styles.summaryLabel}>
-               {deliveryMethod === 'delivery' ? 'Livraison' : 'Préparation'}
-             </Text>
-             <Text style={styles.summaryValue}>{(deliveryFee || 0).toLocaleString()} GNF</Text>
-           </View>
            
            {/* Frais de planification pour la livraison programmée */}
            {deliveryMethod === 'delivery' && deliveryTimeMode === 'scheduled' && (
@@ -1117,6 +1176,23 @@ export default function CheckoutScreen() {
           onClose={handleClosePaymentWebView}
         />
       </Modal>
+
+      {/* Modal DatePicker pour la sélection de date */}
+      <DatePicker
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onDateSelect={(date) => setScheduledDate(date)}
+        selectedDate={scheduledDate}
+        minDate={new Date()}
+      />
+
+      {/* Modal TimePicker pour la sélection d'heure */}
+      <TimePicker
+        visible={showTimePicker}
+        onClose={() => setShowTimePicker(false)}
+        onTimeSelect={(time) => setScheduledTime(time)}
+        selectedTime={scheduledTime}
+      />
     </SafeAreaView>
   );
 }
@@ -1609,4 +1685,57 @@ const styles = StyleSheet.create({
     color: '#1565C0',
     lineHeight: 16,
   },
-}); 
+  // Styles pour le bouton de date
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  dateButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+  },
+  // Styles pour le bouton d'heure
+  timeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  timeButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+  },
+  // Styles pour le champ d'adresse avec icône de position
+  addressInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  addressInputContainer: {
+    flex: 1,
+  },
+  locationButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8f8f8',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -1,0 +1,143 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "continue": "Continue",
+    "done": "Done",
+    "retry": "Retry"
+  },
+  "navigation": {
+    "home": "Home",
+    "services": "Services",
+    "cart": "Cart",
+    "profile": "Profile"
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Create Account",
+    "logout": "Sign Out",
+    "email": "Email Address",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "fullName": "Full Name",
+    "phone": "Phone Number",
+    "address": "Address",
+    "loginButton": "Sign In",
+    "signupButton": "Create Account",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "loginError": "Invalid email or password",
+    "signupError": "Error creating account",
+    "logoutConfirm": "Are you sure you want to sign out?",
+    "logoutCancel": "Cancel",
+    "logoutAction": "Sign Out",
+    "logoutError": "Error signing out"
+  },
+  "profile": {
+    "title": "My Account",
+    "edit": "Edit Profile",
+    "language": "Language",
+    "chat": "Chat with us",
+    "payment": "Payment Methods",
+    "map": "Default Map Application",
+    "subscription": "Subscription Settings",
+    "terms": "Terms & Services",
+    "privacy": "Privacy Policy",
+    "signout": "Sign Out",
+    "settings": "Settings",
+    "myOrders": "My Orders",
+    "myPackages": "My Packages",
+    "myReservations": "My Reservations",
+    "myFavorites": "My Favorites",
+    "reviewApp": "Rate App",
+    "stats": "My Statistics",
+    "orders": "Orders",
+    "packages": "Packages",
+    "reservations": "Reservations",
+    "nameUndefined": "Name not defined",
+    "emailUndefined": "Email not defined"
+  },
+  "language": {
+    "select": "Select Language",
+    "save": "Save",
+    "french": "Français",
+    "english": "English",
+    "arabic": "العربية",
+    "description": "Choose your preferred language for the application interface"
+  },
+  "editProfile": {
+    "title": "Edit Profile",
+    "name": "Full Name",
+    "phone": "Phone Number",
+    "email": "Email Address",
+    "emailDisabled": "Email address cannot be modified",
+    "save": "Save",
+    "delete": "Delete Account",
+    "deleteConfirm": "Are you sure you want to delete your account? This action is irreversible.",
+    "deleteCancel": "Cancel",
+    "deleteAction": "Delete",
+    "loading": "Loading profile...",
+    "success": "Profile updated successfully!",
+    "errorName": "Name is required.",
+    "errorGeneral": "An unexpected error occurred.",
+    "errorUpdate": "Error updating profile.",
+    "disclaimer": "BraPrime communications and transaction history will be sent to the verified email address"
+  },
+  "map": {
+    "title": "Default Map Application",
+    "subtitle": "Will be opened to display the order address",
+    "google": "Google Maps",
+    "apple": "Apple Maps"
+  },
+  "payment": {
+    "title": "Add New Card",
+    "cardNumber": "Card Number",
+    "expiry": "Expiry Date",
+    "cvv": "CVV",
+    "holder": "Cardholder Name",
+    "save": "Save Card"
+  },
+  "splash": {
+    "selectLanguage": "Select Your Language",
+    "madeInConakry": "Made in Conakry with ❤️"
+  },
+  "home": {
+    "title": "Home",
+    "welcome": "Welcome",
+    "address": "Address",
+    "searchPlaceholder": "Search businesses or products",
+    "categories": "Categories",
+    "popularServices": "Services",
+    "recentOrders": "Recent Orders",
+    "viewAll": "View All"
+  },
+  "services": {
+    "title": "Services",
+    "allServices": "All Services",
+    "filter": "Filter",
+    "sort": "Sort",
+    "noServices": "No services available",
+    "noServicesMessage": "Services will be available soon. Please try again later.",
+    "searchPlaceholder": "Search for a service...",
+    "stats": "Statistics",
+    "serviceTypes": "Service types",
+    "specialServices": "Special services",
+    "withImages": "With images"
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Your cart is empty",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "checkout": "Checkout",
+    "remove": "Remove",
+    "quantity": "Quantity"
+  }
+}

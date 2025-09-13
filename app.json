@@ -22,7 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison."
       },
-      "buildNumber": "5"
+      "buildNumber": "6"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,7 +53,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

@@ -4,12 +4,13 @@ import { SessionPersistenceProvider } from '../components/SessionPersistenceProv
 import ToastContainer from '../components/ToastContainer';
 import { AuthProvider } from '../lib/contexts/AuthContext';
 import { CartProvider } from '../lib/contexts/CartContext';
-import { LanguageProvider } from '../lib/contexts/LanguageContext';
+import { I18nProvider } from '../lib/contexts/I18nContext';
 import { ToastProvider } from '../lib/contexts/ToastContext';
+import '../lib/i18n'; // Initialiser i18next
 
 export default function RootLayout() {
   return (
-    <LanguageProvider>
+    <I18nProvider>
       <AuthProvider>
         <CartProvider>
           <ToastProvider>
@@ -36,6 +37,6 @@ export default function RootLayout() {
           </ToastProvider>
         </CartProvider>
       </AuthProvider>
-    </LanguageProvider>
+    </I18nProvider>
   );
 }

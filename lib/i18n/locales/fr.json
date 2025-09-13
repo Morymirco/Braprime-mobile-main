@@ -1,0 +1,143 @@
+{
+  "common": {
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "back": "Retour",
+    "continue": "Continuer",
+    "done": "Terminé",
+    "retry": "Réessayer"
+  },
+  "navigation": {
+    "home": "Accueil",
+    "services": "Services",
+    "cart": "Panier",
+    "profile": "Profil"
+  },
+  "auth": {
+    "login": "Connexion",
+    "signup": "Créer un compte",
+    "logout": "Se déconnecter",
+    "email": "Adresse email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "fullName": "Nom complet",
+    "phone": "Numéro de téléphone",
+    "address": "Adresse",
+    "loginButton": "Se connecter",
+    "signupButton": "Créer un compte",
+    "noAccount": "Pas de compte ?",
+    "hasAccount": "Déjà un compte ?",
+    "loginError": "Email ou mot de passe incorrect",
+    "signupError": "Erreur lors de la création du compte",
+    "logoutConfirm": "Êtes-vous sûr de vouloir vous déconnecter ?",
+    "logoutCancel": "Annuler",
+    "logoutAction": "Déconnecter",
+    "logoutError": "Erreur lors de la déconnexion"
+  },
+  "profile": {
+    "title": "Mon Compte",
+    "edit": "Modifier le profil",
+    "language": "Langue",
+    "chat": "Discuter avec nous",
+    "payment": "Méthodes de paiement",
+    "map": "Application de carte par défaut",
+    "subscription": "Paramètres d'abonnement",
+    "terms": "Conditions et services",
+    "privacy": "Politique de confidentialité",
+    "signout": "Se déconnecter",
+    "settings": "Paramètres",
+    "myOrders": "Mes Commandes",
+    "myPackages": "Mes Colis",
+    "myReservations": "Mes Réservations",
+    "myFavorites": "Mes Favoris",
+    "reviewApp": "Donner un avis",
+    "stats": "Mes Statistiques",
+    "orders": "Commandes",
+    "packages": "Colis",
+    "reservations": "Réservations",
+    "nameUndefined": "Nom non défini",
+    "emailUndefined": "Email non défini"
+  },
+  "language": {
+    "select": "Sélectionner la langue",
+    "save": "Enregistrer",
+    "french": "Français",
+    "english": "English",
+    "arabic": "العربية",
+    "description": "Choisissez votre langue préférée pour l'interface de l'application"
+  },
+  "editProfile": {
+    "title": "Modifier le profil",
+    "name": "Nom complet",
+    "phone": "Numéro de téléphone",
+    "email": "Adresse e-mail",
+    "emailDisabled": "L'adresse e-mail ne peut pas être modifiée",
+    "save": "Enregistrer",
+    "delete": "Supprimer le compte",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+    "deleteCancel": "Annuler",
+    "deleteAction": "Supprimer",
+    "loading": "Chargement du profil...",
+    "success": "Profil mis à jour avec succès !",
+    "errorName": "Le nom est obligatoire.",
+    "errorGeneral": "Une erreur inattendue s'est produite.",
+    "errorUpdate": "Erreur lors de la mise à jour du profil.",
+    "disclaimer": "Les communications et l'historique des transactions de BraPrime seront envoyés à l'adresse e-mail vérifiée"
+  },
+  "map": {
+    "title": "Application de carte par défaut",
+    "subtitle": "Sera ouverte pour afficher l'adresse de la commande",
+    "google": "Google Maps",
+    "apple": "Apple Maps"
+  },
+  "payment": {
+    "title": "Ajouter une nouvelle carte",
+    "cardNumber": "Numéro de carte",
+    "expiry": "Date d'expiration",
+    "cvv": "CVV",
+    "holder": "Nom du titulaire",
+    "save": "Enregistrer la carte"
+  },
+  "splash": {
+    "selectLanguage": "Choisissez votre langue",
+    "madeInConakry": "Made in Conakry with ❤️"
+  },
+  "home": {
+    "title": "Accueil",
+    "welcome": "Bienvenue",
+    "address": "Adresse",
+    "searchPlaceholder": "Rechercher des commerces ou produits",
+    "categories": "Catégories",
+    "popularServices": "Services",
+    "recentOrders": "Commandes Récentes",
+    "viewAll": "Voir tout"
+  },
+  "services": {
+    "title": "Services",
+    "allServices": "Tous les Services",
+    "filter": "Filtrer",
+    "sort": "Trier",
+    "noServices": "Aucun service disponible",
+    "noServicesMessage": "Les services seront bientôt disponibles. Veuillez réessayer plus tard.",
+    "searchPlaceholder": "Rechercher un service...",
+    "stats": "Statistiques",
+    "serviceTypes": "Types de services",
+    "specialServices": "Services spéciaux",
+    "withImages": "Avec images"
+  },
+  "cart": {
+    "title": "Panier",
+    "empty": "Votre panier est vide",
+    "subtotal": "Sous-total",
+    "total": "Total",
+    "checkout": "Commander",
+    "remove": "Supprimer",
+    "quantity": "Quantité"
+  }
+}
