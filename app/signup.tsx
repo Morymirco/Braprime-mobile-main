@@ -13,6 +13,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useI18n } from '../lib/contexts/I18nContext';
 import { AuthService, SignupData } from '../lib/services/AuthService';
 
 interface FormData {
@@ -35,6 +36,7 @@ interface FormErrors {
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -64,36 +66,36 @@ export default function SignupScreen() {
 
     if (step === 1) {
       if (!formData.name.trim()) {
-        newErrors.name = 'Le nom est requis';
+        newErrors.name = t('auth.nameRequired');
       }
       if (!formData.email.trim()) {
-        newErrors.email = 'L\'email est requis';
+        newErrors.email = t('auth.emailRequiredSignup');
       } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-        newErrors.email = 'Format d\'email invalide';
+        newErrors.email = t('auth.emailInvalid');
       }
     }
 
     if (step === 2) {
       if (!formData.password) {
-        newErrors.password = 'Le mot de passe est requis';
+        newErrors.password = t('auth.passwordRequired');
       } else if (formData.password.length < 6) {
-        newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+        newErrors.password = t('auth.passwordMinLength');
       }
       if (!formData.confirmPassword) {
-        newErrors.confirmPassword = 'La confirmation du mot de passe est requise';
+        newErrors.confirmPassword = t('auth.confirmPasswordRequired');
       } else if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+        newErrors.confirmPassword = t('auth.passwordsMismatch');
       }
     }
 
     if (step === 3) {
       if (!formData.phone_number.trim()) {
-        newErrors.phone_number = 'Le numéro de téléphone est requis';
+        newErrors.phone_number = t('auth.phoneRequired');
       } else if (!/^[\+]?[0-9\s\-\(\)]{8,}$/.test(formData.phone_number)) {
-        newErrors.phone_number = 'Format de téléphone invalide';
+        newErrors.phone_number = t('auth.phoneInvalid');
       }
       if (!formData.address.trim()) {
-        newErrors.address = 'L\'adresse est requise';
+        newErrors.address = t('auth.addressRequired');
       }
     }
 
@@ -149,8 +151,8 @@ export default function SignupScreen() {
       if (result.user) {
         console.log('✅ [SignupScreen] Inscription réussie pour:', result.user.email);
         Alert.alert(
-          'Succès',
-          'Compte client créé avec succès ! Vous pouvez maintenant vous connecter.',
+          t('common.success'),
+          t('auth.signupSuccess'),
           [
             {
               text: 'OK',
@@ -160,11 +162,11 @@ export default function SignupScreen() {
         );
       } else {
         console.error('❌ [SignupScreen] Échec de l\'inscription:', result.error);
-        Alert.alert('Erreur', result.error || 'Erreur lors de la création du compte');
+        Alert.alert(t('common.error'), result.error || t('auth.signupError'));
       }
     } catch (error) {
       console.error('❌ [SignupScreen] Erreur inattendue:', error);
-      Alert.alert('Erreur', 'Une erreur inattendue s\'est produite. Veuillez réessayer.');
+      Alert.alert(t('common.error'), t('auth.signupErrorGeneric'));
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +187,7 @@ export default function SignupScreen() {
         <View style={[styles.stepCircle, currentStep >= 1 && styles.stepCircleActive]}>
           <Text style={[styles.stepNumber, currentStep >= 1 && styles.stepNumberActive]}>1</Text>
         </View>
-        <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Profil</Text>
+        <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>{t('auth.stepProfile')}</Text>
       </View>
       
       <View style={[styles.stepLine, currentStep >= 2 && styles.stepLineActive]} />
@@ -194,7 +196,7 @@ export default function SignupScreen() {
         <View style={[styles.stepCircle, currentStep >= 2 && styles.stepCircleActive]}>
           <Text style={[styles.stepNumber, currentStep >= 2 && styles.stepNumberActive]}>2</Text>
         </View>
-        <Text style={[styles.stepLabel, currentStep >= 2 && styles.stepLabelActive]}>Sécurité</Text>
+        <Text style={[styles.stepLabel, currentStep >= 2 && styles.stepLabelActive]}>{t('auth.stepSecurity')}</Text>
       </View>
       
       <View style={[styles.stepLine, currentStep >= 3 && styles.stepLineActive]} />
@@ -203,16 +205,16 @@ export default function SignupScreen() {
         <View style={[styles.stepCircle, currentStep >= 3 && styles.stepCircleActive]}>
           <Text style={[styles.stepNumber, currentStep >= 3 && styles.stepNumberActive]}>3</Text>
         </View>
-        <Text style={[styles.stepLabel, currentStep >= 3 && styles.stepLabelActive]}>Contact</Text>
+        <Text style={[styles.stepLabel, currentStep >= 3 && styles.stepLabelActive]}>{t('auth.stepContact')}</Text>
       </View>
     </View>
   );
 
   const renderStep1 = () => (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Informations personnelles</Text>
+      <Text style={styles.stepTitle}>{t('auth.step1Title')}</Text>
       <Text style={styles.stepDescription}>
-        Commençons par vos informations de base pour créer votre compte client.
+        {t('auth.step1Description')}
       </Text>
 
       {/* Nom */}
@@ -220,7 +222,7 @@ export default function SignupScreen() {
         <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Nom complet"
+          placeholder={t('auth.fullName')}
           placeholderTextColor="#999"
           value={formData.name}
           onChangeText={(value) => handleInputChange('name', value)}
@@ -236,7 +238,7 @@ export default function SignupScreen() {
         <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Email"
+          placeholder={t('auth.email')}
           placeholderTextColor="#999"
           value={formData.email}
           onChangeText={(value) => handleInputChange('email', value)}
@@ -252,7 +254,7 @@ export default function SignupScreen() {
       <View style={styles.infoContainer}>
         <Ionicons name="information-circle-outline" size={20} color="#007AFF" />
         <Text style={styles.infoText}>
-          Vous créez un compte client pour commander vos plats préférés et suivre vos livraisons.
+          {t('auth.clientAccountInfo')}
         </Text>
       </View>
     </View>
@@ -260,9 +262,9 @@ export default function SignupScreen() {
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Sécurité du compte</Text>
+      <Text style={styles.stepTitle}>{t('auth.step2Title')}</Text>
       <Text style={styles.stepDescription}>
-        Créez un mot de passe sécurisé pour protéger votre compte.
+        {t('auth.step2Description')}
       </Text>
 
       {/* Mot de passe */}
@@ -270,7 +272,7 @@ export default function SignupScreen() {
         <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Mot de passe"
+          placeholder={t('auth.password')}
           placeholderTextColor="#999"
           value={formData.password}
           onChangeText={(value) => handleInputChange('password', value)}
@@ -295,7 +297,7 @@ export default function SignupScreen() {
         <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Confirmer le mot de passe"
+          placeholder={t('auth.confirmPassword')}
           placeholderTextColor="#999"
           value={formData.confirmPassword}
           onChangeText={(value) => handleInputChange('confirmPassword', value)}
@@ -317,7 +319,7 @@ export default function SignupScreen() {
 
       {/* Indicateur de force du mot de passe */}
       <View style={styles.passwordStrengthContainer}>
-        <Text style={styles.passwordStrengthLabel}>Force du mot de passe:</Text>
+        <Text style={styles.passwordStrengthLabel}>{t('auth.passwordStrength')}</Text>
         <View style={styles.passwordStrengthBars}>
           {[1, 2, 3].map((level) => (
             <View
@@ -331,8 +333,8 @@ export default function SignupScreen() {
           ))}
         </View>
         <Text style={styles.passwordStrengthText}>
-          {formData.password.length < 6 ? 'Faible' : 
-           formData.password.length < 8 ? 'Moyen' : 'Fort'}
+          {formData.password.length < 6 ? t('auth.passwordWeak') : 
+           formData.password.length < 8 ? t('auth.passwordMedium') : t('auth.passwordStrong')}
         </Text>
       </View>
     </View>
@@ -340,9 +342,9 @@ export default function SignupScreen() {
 
   const renderStep3 = () => (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Informations de contact</Text>
+      <Text style={styles.stepTitle}>{t('auth.step3Title')}</Text>
       <Text style={styles.stepDescription}>
-        Ajoutez vos informations de contact pour une meilleure expérience de livraison.
+        {t('auth.step3Description')}
       </Text>
 
       {/* Téléphone */}
@@ -350,7 +352,7 @@ export default function SignupScreen() {
         <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Numéro de téléphone"
+          placeholder={t('auth.phonePlaceholder')}
           placeholderTextColor="#999"
           value={formData.phone_number}
           onChangeText={(value) => handleInputChange('phone_number', value)}
@@ -365,7 +367,7 @@ export default function SignupScreen() {
         <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Adresse de livraison"
+          placeholder={t('auth.addressPlaceholder')}
           placeholderTextColor="#999"
           value={formData.address}
           onChangeText={(value) => handleInputChange('address', value)}
@@ -381,7 +383,7 @@ export default function SignupScreen() {
       <View style={styles.infoContainer}>
         <Ionicons name="car-outline" size={20} color="#34C759" />
         <Text style={styles.infoText}>
-          Votre adresse nous permet de vous proposer les meilleurs restaurants et commerces à proximité.
+          {t('auth.deliveryInfo')}
         </Text>
       </View>
     </View>
@@ -411,7 +413,7 @@ export default function SignupScreen() {
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Créer un compte client</Text>
+          <Text style={styles.headerTitle}>{t('auth.signupTitle')}</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -436,7 +438,7 @@ export default function SignupScreen() {
                 onPress={handlePreviousStep}
                 disabled={isLoading}
               >
-                <Text style={styles.secondaryButtonText}>Précédent</Text>
+                <Text style={styles.secondaryButtonText}>{t('auth.previous')}</Text>
               </TouchableOpacity>
             )}
             
@@ -446,7 +448,7 @@ export default function SignupScreen() {
                 onPress={handleNextStep}
                 disabled={isLoading}
               >
-                <Text style={styles.primaryButtonText}>Suivant</Text>
+                <Text style={styles.primaryButtonText}>{t('auth.next')}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -455,9 +457,9 @@ export default function SignupScreen() {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <Text style={styles.primaryButtonText}>Création...</Text>
+                  <Text style={styles.primaryButtonText}>{t('auth.creating')}</Text>
                 ) : (
-                  <Text style={styles.primaryButtonText}>Créer mon compte</Text>
+                  <Text style={styles.primaryButtonText}>{t('auth.createAccount')}</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -465,7 +467,7 @@ export default function SignupScreen() {
 
           <TouchableOpacity onPress={handleBackToLogin} style={styles.loginLink}>
             <Text style={styles.loginLinkText}>
-              Déjà un compte ? <Text style={styles.loginLinkBold}>Se connecter</Text>
+              {t('auth.hasAccount')} <Text style={styles.loginLinkBold}>{t('auth.loginButton')}</Text>
             </Text>
           </TouchableOpacity>
         </View>

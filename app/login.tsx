@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/contexts/AuthContext';
+import { useI18n } from '../lib/contexts/I18nContext';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signInWithEmailPassword, loading, error, clearError } = useAuth();
+  const { t } = useI18n();
 
   // État pour la connexion
   const [email, setEmail] = useState('');
@@ -25,7 +27,7 @@ export default function LoginScreen() {
     setLocalError(null);
     
     if (!email || !password) {
-      setLocalError('Veuillez saisir votre email et mot de passe.');
+      setLocalError(t('auth.emailRequired'));
       return;
     }
     
@@ -55,14 +57,14 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.title}>Connexion</Text>
+        <Text style={styles.title}>{t('auth.login')}</Text>
 
         {/* Email */}
         <View style={styles.inputContainer}>
           <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Adresse email"
+            placeholder={t('auth.email')}
             placeholderTextColor="#999"
             value={email}
             onChangeText={(text) => {
@@ -81,7 +83,7 @@ export default function LoginScreen() {
           <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Mot de passe"
+            placeholder={t('auth.password')}
             placeholderTextColor="#999"
             value={password}
             onChangeText={(text) => {
@@ -116,14 +118,14 @@ export default function LoginScreen() {
             styles.continueButtonText,
             isValidEmail(email) && password.length >= 6 && styles.continueButtonTextActive
           ]}>
-            {loading ? 'Connexion en cours...' : 'Se connecter'}
+            {loading ? t('auth.loginLoading') : t('auth.loginButton')}
           </Text>
         </TouchableOpacity>
 
         {/* Lien pour créer un compte */}
         <TouchableOpacity onPress={handleCreateAccount}>
           <Text style={styles.switchText}>
-            Pas de compte ? <Text style={styles.switchLink}>Créer un compte</Text>
+            {t('auth.noAccount')} <Text style={styles.switchLink}>{t('auth.createAccount')}</Text>
           </Text>
         </TouchableOpacity>
       </View>
