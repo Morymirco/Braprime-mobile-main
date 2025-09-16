@@ -50,7 +50,12 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "origin": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
