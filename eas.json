@@ -3,9 +3,6 @@
     "version": ">= 5.9.1",
     "promptToConfigurePushNotifications": false
   },
-  "npm": {
-    "cache": false
-  },
   "build": {
     "development": {
       "developmentClient": true,
@@ -33,14 +30,14 @@
         "cache": {
           "disabled": false
         },
-        "node": "20.16.0"
+        "node": "20.19.4"
       },
       "android": {
         "buildType": "apk",
         "cache": {
           "disabled": false
         },
-        "node": "20.16.0"
+        "node": "20.19.4"
       },
       "env": {
         "NODE_ENV": "production"
