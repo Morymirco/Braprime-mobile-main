@@ -1,0 +1,10 @@
+# Fichiers à ignorer lors du build EAS
+node_modules/.cache
+.expo
+.metro-cache
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+*.lock
+yarn.lock

@@ -8,8 +8,14 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "install": "npm install --legacy-peer-deps",
-    "postinstall": "expo install --fix"
+    "install": "npm ci --prefer-offline --no-audit --no-fund",
+    "install:fast": "npm install --prefer-offline --no-audit --no-fund --legacy-peer-deps",
+    "postinstall": "expo install --fix",
+    "build:fast": "eas build --platform all --profile fast",
+    "build:android": "eas build --platform android --profile fast",
+    "build:ios": "eas build --platform ios --profile fast",
+    "prebuild": "expo prebuild --clean",
+    "bundle:analyze": "npx expo export --platform android --output-dir ./dist --dev false"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

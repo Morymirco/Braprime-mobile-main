@@ -23,7 +23,7 @@
         "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison."
       },
-      "buildNumber": "14"
+      "buildNumber": "17"
     },
     "android": {
       "adaptiveIcon": {
@@ -63,6 +63,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "optimization": {
+      "images": {
+        "allowUpscaling": false,
+        "resizeMode": "contain"
+      }
     },
     "extra": {
       "router": {},

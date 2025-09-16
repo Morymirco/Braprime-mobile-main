@@ -3,20 +3,57 @@
     "version": ">= 5.9.1",
     "promptToConfigurePushNotifications": false
   },
+  "npm": {
+    "cache": false
+  },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "cache": {
+        "disabled": false
+      },
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "node": "20.16.0"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "cache": {
+        "disabled": false
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
     },
     "production": {
       "ios": {
-        "autoIncrement": "buildNumber"
+        "autoIncrement": "buildNumber",
+        "cache": {
+          "disabled": false
+        },
+        "node": "20.16.0"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "cache": {
+          "disabled": false
+        },
+        "node": "20.16.0"
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "fast": {
+      "extends": "production",
+      "cache": {
+        "disabled": false
+      },
+      "env": {
+        "NODE_ENV": "production",
+        "EXPO_OPTIMIZE": "true"
       }
     }
   },
