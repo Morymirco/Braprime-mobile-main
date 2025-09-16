@@ -1,57 +1,19 @@
 {
   "cli": {
     "version": ">= 5.9.1",
-    "promptToConfigurePushNotifications": false
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "cache": {
-        "disabled": false
-      },
-      "env": {
-        "NODE_ENV": "development"
-      },
-      "node": "20.16.0"
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "cache": {
-        "disabled": false
-      },
-      "env": {
-        "NODE_ENV": "production"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "ios": {
-        "autoIncrement": "buildNumber",
-        "cache": {
-          "disabled": false
-        },
-        "node": "20.19.4"
-      },
-      "android": {
-        "buildType": "apk",
-        "cache": {
-          "disabled": false
-        },
-        "node": "20.19.4"
-      },
-      "env": {
-        "NODE_ENV": "production"
-      }
-    },
-    "fast": {
-      "extends": "production",
-      "cache": {
-        "disabled": false
-      },
-      "env": {
-        "NODE_ENV": "production",
-        "EXPO_OPTIMIZE": "true"
-      }
+      "distribution": "store",
+      "autoIncrement": true
     }
   },
   "submit": {

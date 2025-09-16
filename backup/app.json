@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "BraPrime",
+    "slug": "prime",
+    "version": "1.0.2",
+    "cli": {
+      "appVersionSource": "local"
+    },
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "braprime",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bratech.prime",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBQ8uIPeWgjk9692eBJ_Tch51tPRDahU9Y"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour afficher les commerces à proximité et faciliter la livraison."
+      },
+      "buildNumber": "18"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.bratech.prime",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBQ8uIPeWgjk9692eBJ_Tch51tPRDahU9Y"
+        }
+      },
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "optimization": {
+      "images": {
+        "allowUpscaling": false,
+        "resizeMode": "contain"
+      }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e4b4a45c-0b43-46a6-971a-249c27800163"
+      }
+    },
+    "owner": "bratech"
+  }
+}
